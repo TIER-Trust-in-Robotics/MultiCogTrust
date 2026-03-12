@@ -16,6 +16,7 @@ Once installed, create a virutal environment with uv, then install all libraries
 | Audio + Text | combined tensor using some embedding |  ???? | Sentiment analysis |
 
 # Proposed Architecture
+```
 ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
 │  Vision     │  │  Audio      │  │    Text     │
 │  Pipeline   │  │  Pipeline   │  │  Pipeline   │
@@ -39,3 +40,4 @@ Once installed, create a virutal environment with uv, then install all libraries
                    │ Head    │
                    │ (MLP)   │
                    └─────────┘
+````
