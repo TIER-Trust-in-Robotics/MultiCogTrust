@@ -1,10 +1,9 @@
-import silero_vad
 import numpy as np
 import onnxruntime as ort
 from collections import deque
 
 
-# Custom DataTypes
+# Custom DataTypes for audio.
 
 
 class speachSegment:
@@ -29,7 +28,6 @@ class speachSegment:
         return self.end_time - self.start_time
 
 
-#
 class audioSegment:
     """
     Segment of audio picked up by SileroVad, possibly background noise, or actual speech.
@@ -50,15 +48,18 @@ class audioSegment:
         return len(self.samples) / self.sample_rate
 
 
+# Main function
+
+
 class SileroVAD:
     """
-    Wrapper for Silero VAD model
+    Wrapper for Silero VAD model.
 
     How it work:
     Silero VAD has two states, IDLE and SPEAKING (self._speaking).
 
 
-    ## IDLE state
+    IDLE state:
 
     AudioSample (audio samples from pyAudio) are continously addekkd to a pre buffer in Silero VAD (self._pre_buffer). These audioSegments are passed through
 
@@ -66,9 +67,9 @@ class SileroVAD:
     Silero VAD process each audioSegment sample to determin if it contains spoken words, adding them to the pre buffer in positive cases. Once the pre buffer reaches a certain size, the model enters the SPEAKING STATE and the pre buffer is dumped into the speach chunk (self.speach_chunk)
 
 
-    ## SPEAKING state
-    All incoming audioBuffers are then added to the
+    SPEAKING state:
 
+    All incoming audioBuffers are then added to the building speachChunk.
 
     When a certain number of audioChunks will no spoken words are detected sequentially, the model returns to the IDLE state. This transition also has the speach chunks concatonated to form a speachChunk.
 
@@ -81,23 +82,22 @@ class SileroVAD:
         pre_buffer_size: int = 10,
         sample_rate: int = 16000,
         chunk_ms: int = 30,
-        min_speech_ms: int = 300,
-        min_silence_ms: int = 300,
+        min_speech_ms: int = 300,  # durration of detected speach before switching from IDLE to SPEAKING
+        min_silence_ms: int = 300,  # duriaton of detected silence before switching from SPEAKING to IDLE
     ):
         self.model = ort.InferenceSession(
             model_path,
-            providers=["CPUExecutionProvider"],
+            providers=[
+                "CPUExecutionProvider"
+            ],  # change to CUDA when deployed on Jetson Orin Nano
         )
         """
         The ONNX version of silero VAD expects batched inputs (batch_size, num_samples) which requires an batch_size axis be added to the audio before passing.
         """
-
-        self._state = np.zeros(
-            (2, 1, 128), dtype=np.float32
-        )  # unified LSTM state (v6 API)
-        self._sr = np.array(
-            [sample_rate], dtype=np.int64
-        )  # sample rate as array to make reshaping inputs easier
+        self._sr = np.array(sample_rate, dtype=np.int64)
+        # self._h = np.zeros((2, 1, 16), dtype=np.float32)
+        # self._c = np.zeros((2, 1, 16), dtype=np.float32)
+        self._state = np.zeros((2, 1, 128), dtype=np.float32)
 
         self._threshold = threshold
         self._sample_rate = sample_rate
@@ -117,24 +117,26 @@ class SileroVAD:
         self._pre_buffer: deque = deque(maxlen=pre_buffer_size)
 
     def _finish_segment(self) -> audioSegment:
-        utterance = np.concat([chunk.sampes for chunk in self._speech_chunks])
+        utterance = np.concatenate([chunk.samples for chunk in self._speech_chunks])
 
-        return audioSegment(
+        return speachSegment(
             samples=utterance,
             start_time=self._speech_chunks[0].timestamp,
-            end_time=self._speech_chunks[-1].timestamp,
+            end_time=self._speech_chunks[-1].timestamp
+            + self._speech_chunks[-1].duration,
             sample_rate=self._sample_rate,
         )
 
     def _speach_prob(self, samples: np.ndarray) -> float:
-        audio = samples[np.newaxis, :].astype(
-            np.float32
-        )  # adding batch dim, shape is now (1, n_samples)
+        """
+        Silero on Onnx expects inputs to be of the form (batch_size, chunk_samples)
+        """
+        input_data = samples.astype(np.float32).reshape(1, -1)
 
         out, self._state = self.model.run(
             None,
             {
-                "input": audio,
+                "input": input_data,
                 "state": self._state,
                 "sr": self._sr,
             },
@@ -142,7 +144,7 @@ class SileroVAD:
 
         return float(out[0][0])  # out is probability in the range [0.0, 1.0]
 
-    def process_chunk(self, chunk: audioSegment) -> speachSegment | None:
+    def process_chunk(self, chunk: audioSegment):
         """
         Responsible for adding audioSegments to the buffer and determining if buffer is background noise or spoken words. Output is a speechSegment in the later case, None in the former.
         """
@@ -150,47 +152,46 @@ class SileroVAD:
         prob = self._speach_prob(chunk.samples)
         is_speech = prob > self._threshold
 
-        if self._speaking:  # model is in SPEAKING state
+        if self._speaking:  # SPEAKING
             self._speech_chunks.append(chunk)
 
-            if not is_speech:  # speaker is no longer speakign
+            if not is_speech:
                 self._silence_count += 1
 
-                if (
-                    self._silence_count >= self.min_silence_chunks
-                ):  # dump audioSegments into speechSegment (speaker is finished)
+                if self._silence_count >= self.min_silence_chunks:
                     segment = self._finish_segment()
-                    self.reset()
-                    return segment
-            else:  # speaker resumed, reset silence counter
+                    self._reset_segment()
+                    return prob, segment
+            else:
                 self._silence_count = 0
-        else:  # model is in IDLE state
+        else:  # IDLE
             if is_speech:
                 self._speech_count += 1
+                self._pre_buffer.append(chunk)
+
                 if self._speech_count >= self.min_speech_chunks:
                     self._speaking = True
                     self._silence_count = 0
                     self._speech_chunks = list(self._pre_buffer)
-                    self._speech_chunks.append(chunk)
             else:
+                self._speech_count = 0
                 self._pre_buffer.append(chunk)
 
-        return None
+        return None, prob
 
-    def reset(self):
+    def _reset_segment(self):
         self._pre_buffer.clear()
         self._speech_chunks = []
         self._speaking = False
         self._silence_count = 0
         self._speech_count = 0
 
+    def _reset_all(self):
+        self._state = np.zeros_like(self._state)
+        self._reset_segment()
 
-# PyAudio Wrapper that turns raw audio from PyAudio into audioSegment objects
 
-# Demo
-
-
-# from: https://github.com/snakers4/silero-vad/blob/master/examples/pyaudio-streaming/pyaudio-streaming-examples.ipynb
+# from: https://github.com/snakers4/silero-vad/blob/master/examples/pyaudio-streaming/pyaudio-streaming-examples.ipynb (the Siler VAD input must be of type float32)
 def int2float(sound):
     abs_max = np.abs(sound).max()
     sound = sound.astype("float32")
@@ -203,15 +204,16 @@ def int2float(sound):
 if __name__ == "__main__":
     import pyaudio
     import wave
-    import cv2
-    import time
-    import matplotlib.pyplot as plt
+
+    # import time
+    import sys
 
     SAMPLE_RATE = 16000
-    CHUNK_MS = 30
-    CHUNK = int(SAMPLE_RATE / 10)
+    N_SAMPLES = (
+        512  # newer versions of Silero VAD expect 512 samples per chunk at 16kHz
+    )
+    CHUNK_MS = N_SAMPLES / SAMPLE_RATE * 1000  # 32 ms
 
-    # VAD = SileroVAD(sample_rate=SAMPLE_RATE, chunk_ms=CHUNK_MS)
     VAD = SileroVAD()
     audio = pyaudio.PyAudio()
     stream = audio.open(
@@ -219,49 +221,48 @@ if __name__ == "__main__":
         channels=1,
         input=True,
         rate=SAMPLE_RATE,
-        frames_per_buffer=CHUNK,
+        frames_per_buffer=N_SAMPLES,
     )
-    # cap = cv2.VideoCapture(0)
 
-    # paramets not understood
-
-    n_samples = 512
-
+    frames = []
     probabilities = []
+    speach_segments: []
+    cur_t = 0.0
 
-    data = []
+    segment_count = 0
+    try:
+        while True:
+            raw = stream.read(N_SAMPLES, exception_on_overflow=False)
+            frames.append(raw)
 
-    print("Listening...")
-    for i in range(0, 100):
-        audio_chunks = stream.read(n_samples)
-        data.append(audio_chunks)
+            audio_int16 = np.frombuffer(raw, dtype=np.int16)
+            audio_float32 = int2float(audio_int16)
 
-        audio_chunks_int16 = np.frombuffer(audio_chunks, np.int16)
-        audio_chunks_float32 = int2float(audio_chunks_int16)
+            timestamp = cur_t
+            cur_t += CHUNK_MS / 1000.0
 
-        speach_prob = VAD._speach_prob(audio_chunks_float32)
-        probabilities.append(speach_prob)
-        print(speach_prob)
+            aSegment = audioSegment(
+                samples=audio_float32,
+                timestamp=timestamp,
+                sample_rate=SAMPLE_RATE,
+            )
 
-        if speach_prob > VAD._threshold:
-            print("Speaking")
+            result, prob = VAD.process_chunk(aSegment)
 
-    # Cleanup
-    print("Done")
+            bar = "█" * int(prob * 30) + "░" * (30 - int(prob * 30))
+            marker = " ◄ SPEECH" if prob > VAD._threshold else ""
+
+            state = "SPEAKING" if VAD._speaking else "IDLE"
+
+            # use \r to overwrite line in IDLE, newline on state transitions
+            line = f"[{timestamp:7.2f}s] [{state:>8s}] {bar} {prob:.3f}{marker}"
+            sys.stdout.write(f"\r{line}    ")
+            sys.stdout.flush()
+
+    except KeyboardInterrupt:
+        print("\n\nStopping...")
+        print(f"Detected {segment_count} speech segment(s)")
 
     stream.stop_stream()
     stream.close()
     audio.terminate()
-
-    X = np.arange(len(probabilities))
-
-    wf = wave.open("outvoice.wav", "wb")
-    wf.setnchannels(1)
-    wf.setsampwidth(audio.get_sample_size(pyaudio.paInt16))
-    wf.setframerate(SAMPLE_RATE)
-    wf.writeframes(b"".join(data))
-    wf.close()
-
-    plt.plot(X, probabilities)
-    # print(max())
-    plt.show()
