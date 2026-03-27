@@ -1,6 +1,7 @@
+import torch
 import numpy as np
-import onnxruntime as ort
 from collections import deque
+from silero_vad import load_silero_vad
 
 
 # Custom DataTypes for audio.
@@ -53,7 +54,7 @@ class audioSegment:
 
 class SileroVAD:
     """
-    Wrapper for Silero VAD model.
+    Wrapper for Silero VAD model (PyTorch JIT version).
 
     How it work:
     Silero VAD has two states, IDLE and SPEAKING (self._speaking).
@@ -61,49 +62,43 @@ class SileroVAD:
 
     IDLE state:
 
-    AudioSample (audio samples from pyAudio) are continously addekkd to a pre buffer in Silero VAD (self._pre_buffer). These audioSegments are passed through
+    AudioSample (audio samples from pyAudio) are continuously added to a pre buffer in Silero VAD (self._pre_buffer). These audioSegments are passed through
 
 
-    Silero VAD process each audioSegment sample to determin if it contains spoken words, adding them to the pre buffer in positive cases. Once the pre buffer reaches a certain size, the model enters the SPEAKING STATE and the pre buffer is dumped into the speach chunk (self.speach_chunk)
+    Silero VAD process each audioSegment sample to determine if it contains spoken words, adding them to the pre buffer in positive cases. Once the pre buffer reaches a certain size, the model enters the SPEAKING STATE and the pre buffer is dumped into the speach chunk (self.speach_chunk)
 
 
     SPEAKING state:
 
     All incoming audioBuffers are then added to the building speachChunk.
 
-    When a certain number of audioChunks will no spoken words are detected sequentially, the model returns to the IDLE state. This transition also has the speach chunks concatonated to form a speachChunk.
+    When a certain number of audioChunks with no spoken words are detected sequentially, the model returns to the IDLE state. This transition also has the speach chunks concatenated to form a speachChunk.
 
     """
 
     def __init__(
         self,
-        model_path: str = "weights/silero_vad.onnx",
         threshold: float = 0.5,
         pre_buffer_size: int = 10,
         sample_rate: int = 16000,
         chunk_ms: int = 32,
-        min_speech_ms: int = 300,  # durration of detected speach before switching from IDLE to SPEAKING
-        min_silence_ms: int = 300,  # duriaton of detected silence before switching from SPEAKING to IDLE
+        min_speech_ms: int = 300,  # duration of detected speach before switching from IDLE to SPEAKING
+        min_silence_ms: int = 300,  # duration of detected silence before switching from SPEAKING to IDLE
     ):
-        self.model = ort.InferenceSession(
-            model_path,
-            providers=[
-                "CPUExecutionProvider"
-            ],  # change to CUDA when deployed on Jetson Orin Nano
-        )
+        self.model = load_silero_vad()
         """
-        The ONNX version of silero VAD expects batched inputs (batch_size, num_samples) which requires an batch_size axis be added to the audio before passing.
+        The torch JIT version of Silero VAD manages its own internal state,
+        so we don't need to manually track state tensors like the ONNX version.
+        Call model.reset_states() to clear the internal state.
         """
-        self._sr = np.array([sample_rate], dtype=np.int64)
-        self._state = np.zeros((2, 1, 128), dtype=np.float32)
 
         self._threshold = threshold
         self._sample_rate = sample_rate
         self._chunk_ms = chunk_ms
 
         self._speaking = False  # used for connecting speech chunks together in an utterance. i.e. a sentence.
-        self._speech_count = 0  #
-        self._silence_count = 0  #
+        self._speech_count = 0
+        self._silence_count = 0
         self.min_speech_chunks = max(
             1, int(min_speech_ms / chunk_ms)
         )  # threshold for self._speaking to be True (speaking mode)
@@ -127,20 +122,12 @@ class SileroVAD:
 
     def _speach_prob(self, samples: np.ndarray) -> float:
         """
-        Silero on Onnx expects inputs to be of the form (batch_size, chunk_samples)
+        The torch JIT model accepts a 1D tensor of float32 samples
+        and the sampling rate. It handles batching and state internally.
         """
-        input_data = samples.astype(np.float32).reshape(1, -1)
-
-        out, self._state = self.model.run(
-            None,
-            {
-                "input": input_data,
-                "state": self._state,
-                "sr": self._sr,
-            },
-        )
-
-        return float(out[0][0])  # out is probability in the range [0.0, 1.0]
+        audio_tensor = torch.from_numpy(samples.astype(np.float32))
+        prob = self.model(audio_tensor, self._sample_rate)
+        return float(prob)
 
     def process_chunk(self, chunk: audioSegment):
         """
@@ -185,7 +172,7 @@ class SileroVAD:
         self._speech_count = 0
 
     def _reset_all(self):
-        self._state = np.zeros_like(self._state)
+        self.model.reset_states()
         self._reset_segment()
 
 
@@ -202,8 +189,6 @@ def int2float(sound):
 if __name__ == "__main__":
     import pyaudio
     import wave
-
-    # import time
     import sys
 
     SAMPLE_RATE = 16000
