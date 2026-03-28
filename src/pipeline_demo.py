@@ -89,10 +89,6 @@ def transcribe_worker(
             sys.stdout.write(f"\r\033[K")
             print(f"  [{segment.start_time:6.1f}s - {segment.end_time:6.1f}s]  {text}")
 
-def nlp_worker(
-    worker: str
-)
-
 def main(model_name: str = "tiny.en", threshold: float = 0.5):
     print(f"Loading Whisper model '{model_name}'...")
     whisper = WhisperModel(model_name, device="cpu", compute_type="int8")
