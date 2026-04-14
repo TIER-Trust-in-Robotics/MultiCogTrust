@@ -38,7 +38,7 @@ class ProsodicGate:
             raise ValueError(f"Sample rate must be positive, got {sr}")
         
         features = self._extractor.extract(audio, sr)
-        return features["opensmile_features"].astype(np.float32)
+        return features["all_features"].astype(np.float32)
     
     # Training : trains the gate on labelled data
     def fit(self, X: np.ndarray, y: np.ndarray) -> "ProsodicGate":
