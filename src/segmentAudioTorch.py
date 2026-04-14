@@ -59,20 +59,14 @@ class SileroVAD:
     How it work:
     Silero VAD has two states, IDLE and SPEAKING (self._speaking).
 
-
     IDLE state:
 
-    AudioSample (audio samples from pyAudio) are continuously added to a pre buffer in Silero VAD (self._pre_buffer). These audioSegments are passed through
-
-
-    Silero VAD process each audioSegment sample to determine if it contains spoken words, adding them to the pre buffer in positive cases. Once the pre buffer reaches a certain size, the model enters the SPEAKING STATE and the pre buffer is dumped into the speach chunk (self.speach_chunk)
+    SileroVAD processes each audio sample (~32ms) directly from PyAudio (audioSegment) and calculates the probability of it containing spooken word. All segments that pass the threshold (tunable with self.threshold) are added to a buffer. Once the buffer reaches sufficient size (tunable with self.min_speAech_ms) within an certain time (clearning every??? ) interval the model enters the SPEAKING state.
 
 
     SPEAKING state:
 
-    All incoming audioBuffers are then added to the building speachChunk.
-
-    When a certain number of audioChunks with no spoken words are detected sequentially, the model returns to the IDLE state. This transition also has the speach chunks concatenated to form a speachChunk.
+    SilerVAD starts to conncate all speech positive audioSegments into a speechSegment. If a continous stream of speech negative audio segments are detected (tunable by self.min_silence_ms), the speechSegmenet is constructued and returned.
 
     """
 
