@@ -3,6 +3,14 @@ We will be using the [uv](https://docs.astral.sh/uv/) package manager for depend
 
 Once installed, create a virutal environment with uv, then install all libraries using `uv sync`.
 
+If you absolutely need a `requirements.txt` for legacy tooling, regenerate it from the locked environment rather than editing it by hand:
+
+```
+uv export --frozen --format requirements-txt > requirements.txt
+```
+
+This keeps `pyproject.toml` + `uv.lock` as the single source of truth so both `uv` and plain `pip` installs stay in sync.
+
 # Structure
 
 | Modality | input | Libraries | Output | 
