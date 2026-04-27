@@ -1,9 +1,7 @@
-"""Text embedding utilities for transcribed utterances.
-
-The real-time pipeline needs token-level transformer states while keeping a
-stable mapping back to the original transcript words. This module exposes a
-small encoder and a queue worker that can be used from ``pipeline_demo.py``.
 """
+Text embedding utilities for transcribed utterances.
+
+BERT based models use subword level tokenization, requiring alignment of the tranformers state of each words subword token, and to its original word."""
 
 from __future__ import annotations
 
@@ -66,6 +64,19 @@ def _map_tokens_to_words(
     special_tokens_mask: list[int],
     words: list[WordSpan],
 ) -> tuple[list[int | None], list[list[int]]]:
+    """
+    Returns:
+    - token_word_indicies: mapping subtoken indicies to the index of their word in the orignal input.
+        e.g. "multi" -> "multiplication", "##plicaiton" -> "multiplication"
+    - word_token_indicies: mapping word indiceis to the the indicies of all their subwords.
+        e.g. "Multiplication" -> "multi", "##plication"
+
+    Params:
+    - token_offsets: Start and end character positions of subtoken witn original text (increases monotonically).
+        e.g. "multi", "##plication" -> (0, 4), (5,13)
+    - special_toke_mask: 0-1 list to mask BERT specific token like [CLS] and [SEP]
+    - words: List of WordSpan objects. (Word with their character start and end index within the orignal input).
+    """
     token_word_indices: list[int | None] = []
     word_token_indices: list[list[int]] = [[] for _ in words]
 
