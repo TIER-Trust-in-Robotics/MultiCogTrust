@@ -1,6 +1,6 @@
 """
 Usage:
-    python src/pipeline_demo.py [--model tiny.en] [--threshold 0.3]
+    uv run python src/pipeline_demo.py [--model tiny.en] [--threshold 0.3]
 """
 
 import threading

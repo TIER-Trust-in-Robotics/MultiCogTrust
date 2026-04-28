@@ -3,50 +3,7 @@ import numpy as np
 from collections import deque
 from silero_vad import load_silero_vad
 
-
-# Custom DataTypes for audio.
-
-
-class speachSegment:
-    """
-    Segment of audio corresponding to speach.
-    """
-
-    def __init__(
-        self,
-        samples: np.ndarray,
-        start_time: float,
-        end_time: float,
-        sample_rate: int = 16000,
-    ):
-        self.samples = samples
-        self.start_time = start_time
-        self.end_time = end_time
-        self.sample_rate = sample_rate
-
-    @property
-    def duration(self) -> float:
-        return self.end_time - self.start_time
-
-
-class audioSegment:
-    """
-    Segment of audio picked up by SileroVad, possibly background noise, or actual speech.
-    """
-
-    def __init__(
-        self,
-        samples: np.ndarray,
-        timestamp: float,
-        sample_rate: int = 16000,
-    ):
-        self.samples = samples
-        self.timestamp = timestamp
-        self.sample_rate = sample_rate
-
-    @property
-    def duration(self) -> float:
-        return len(self.samples) / self.sample_rate
+from src.core.events import AudioChunk, SpeechSegment
 
 
 # Main function
@@ -75,7 +32,7 @@ class SileroVAD:
         threshold: float = 0.5,
         pre_buffer_size: int = 10,
         sample_rate: int = 16000,
-        chunk_ms: int = 32,
+        chunk_ms: float = 32.0,
         min_speech_ms: int = 300,  # duration of detected speach before switching from IDLE to SPEAKING
         min_silence_ms: int = 300,  # duration of detected silence before switching from SPEAKING to IDLE
     ):
@@ -100,17 +57,16 @@ class SileroVAD:
             1, int(min_silence_ms / chunk_ms)
         )  # threshold for self._speaking to be False (idle mode)
 
-        self._speech_chunks: list[speachSegment] = []
+        self._speech_chunks: list[AudioChunk] = []
         self._pre_buffer: deque = deque(maxlen=pre_buffer_size)
 
-    def _finish_segment(self) -> audioSegment:
+    def _finish_segment(self) -> SpeechSegment:
         utterance = np.concatenate([chunk.samples for chunk in self._speech_chunks])
 
-        return speachSegment(
+        return SpeechSegment(
             samples=utterance,
             start_time=self._speech_chunks[0].timestamp,
-            end_time=self._speech_chunks[-1].timestamp
-            + self._speech_chunks[-1].duration,
+            end_time=self._speech_chunks[-1].end_time,
             sample_rate=self._sample_rate,
         )
 
@@ -123,10 +79,16 @@ class SileroVAD:
         prob = self.model(audio_tensor, self._sample_rate)
         return float(prob)
 
-    def process_chunk(self, chunk: audioSegment):
+    def process_chunk(self, chunk: AudioChunk) -> tuple[float, SpeechSegment | None]:
         """
         Responsible for adding audioSegments to the buffer and determining if buffer is background noise or spoken words. Output is a speechSegment in the later case, None in the former.
         """
+
+        chunk = AudioChunk(
+            samples=int2float(chunk.samples),
+            timestamp=chunk.timestamp,
+            sample_rate=chunk.sample_rate,
+        )
 
         prob = self._speach_prob(chunk.samples)
         is_speech = prob > self._threshold
@@ -172,6 +134,9 @@ class SileroVAD:
 
 # from: https://github.com/snakers4/silero-vad/blob/master/examples/pyaudio-streaming/pyaudio-streaming-examples.ipynb (the Siler VAD input must be of type float32)
 def int2float(sound):
+    if np.issubdtype(sound.dtype, np.floating):
+        return sound.astype("float32").squeeze()
+
     abs_max = np.abs(sound).max()
     sound = sound.astype("float32")
     if abs_max > 0:
@@ -191,66 +156,84 @@ if __name__ == "__main__":
     )
     CHUNK_MS = N_SAMPLES / SAMPLE_RATE * 1000  # 32 ms
 
-    VAD = SileroVAD(threshold=0.2)
-    audio = pyaudio.PyAudio()
-    stream = audio.open(
-        format=pyaudio.paInt16,
-        channels=1,
-        input=True,
-        rate=SAMPLE_RATE,
-        frames_per_buffer=N_SAMPLES,
-    )
+    def close_audio(stream, audio):
+        if stream is not None:
+            try:
+                if stream.is_active():
+                    stream.stop_stream()
+            except OSError:
+                pass
+            finally:
+                try:
+                    stream.close()
+                except OSError:
+                    pass
 
-    frames = []
-    probabilities = []
-    speach_segments = []
-    cur_t = 0.0
+        if audio is not None:
+            try:
+                audio.terminate()
+            except OSError:
+                pass
 
-    segment_count = 0
-    try:
-        while True:
-            raw = stream.read(N_SAMPLES, exception_on_overflow=False)
-            frames.append(raw)
+    def write_recording(path: str, frames: list[bytes], sample_width: int) -> None:
+        with wave.open(path, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(sample_width)
+            wf.setframerate(SAMPLE_RATE)
+            wf.writeframes(b"".join(frames))
 
-            audio_int16 = np.frombuffer(raw, dtype=np.int16)
-            audio_float32 = int2float(audio_int16)
+    def main() -> None:
+        vad = SileroVAD(threshold=0.2)
+        audio = None
+        stream = None
+        frames: list[bytes] = []
+        cur_t = 0.0
+        segment_count = 0
+        sample_width = pyaudio.get_sample_size(pyaudio.paInt16)
 
-            timestamp = cur_t
-            cur_t += CHUNK_MS / 1000.0
-
-            aSegment = audioSegment(
-                samples=audio_float32,
-                timestamp=timestamp,
-                sample_rate=SAMPLE_RATE,
+        try:
+            audio = pyaudio.PyAudio()
+            sample_width = audio.get_sample_size(pyaudio.paInt16)
+            stream = audio.open(
+                format=pyaudio.paInt16,
+                channels=1,
+                input=True,
+                rate=SAMPLE_RATE,
+                frames_per_buffer=N_SAMPLES,
             )
 
-            prob, result = VAD.process_chunk(aSegment)
+            while True:
+                raw = stream.read(N_SAMPLES, exception_on_overflow=False)
+                frames.append(raw)
 
-            if result is not None:
-                segment_count += 1
-                speach_segments.append(result)
+                timestamp = cur_t
+                cur_t += CHUNK_MS / 1000.0
 
-            bar = "█" * int(prob * 30) + "░" * (30 - int(prob * 30))
-            marker = " ◄ SPEECH" if prob > VAD._threshold else "   IDLE"
+                chunk = AudioChunk(
+                    samples=np.frombuffer(raw, dtype=np.int16).copy(),
+                    timestamp=timestamp,
+                    sample_rate=SAMPLE_RATE,
+                )
 
-            state = "SPEAKING" if VAD._speaking else "IDLE"
+                prob, result = vad.process_chunk(chunk)
 
-            line = f"[{timestamp:7.2f}s] [{state:>8s}] {bar} {prob:.2f}{marker}"
+                if result is not None:
+                    segment_count += 1
 
-            sys.stdout.write(f"\r{line}    ")
-            sys.stdout.flush()
+                bar = "█" * int(prob * 30) + "░" * (30 - int(prob * 30))
+                marker = " ◄ SPEECH" if prob > vad._threshold else "   IDLE"
+                state = "SPEAKING" if vad._speaking else "IDLE"
+                line = f"[{timestamp:7.2f}s] [{state:>8s}] {bar} {prob:.2f}{marker}"
 
-    except KeyboardInterrupt:
-        print("\n\nStopping...")
-        print(f"Detected {segment_count} speech segment(s)")
+                sys.stdout.write(f"\r{line}    ")
+                sys.stdout.flush()
 
-    stream.stop_stream()
-    stream.close()
-    audio.terminate()
+        except KeyboardInterrupt:
+            sys.stdout.write("\r\033[K")
+            print("\nStopping...")
+        finally:
+            print(f"Detected {segment_count} speech segment(s)")
+            close_audio(stream, audio)
+            write_recording("out.wav", frames, sample_width)
 
-    wf = wave.open("out.wav", "wb")
-    wf.setnchannels(1)
-    wf.setsampwidth(audio.get_sample_size(pyaudio.paInt16))
-    wf.setframerate(SAMPLE_RATE)
-    wf.writeframes(b"".join(frames))
-    wf.close()
+    main()

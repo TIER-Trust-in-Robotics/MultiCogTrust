@@ -1,12 +1,8 @@
 import asyncio
 import numpy as np
-import time
 import pyaudio
-import sys
-from pprint import pprint
 
-# Refer to: https://github.com/QuentinFuxa/WhisperLiveKit
-# For document on WhisperLive
+# Refer to: https://github.com/QuentinFuxa/WhisperLiveKit for document on WhisperLive
 from whisperlivekit import TranscriptionEngine, AudioProcessor
 
 # Audio Const
@@ -17,13 +13,11 @@ CHUNK_SAMPLES = int(SAMPLE_RATE * CHUNCKS_MS / 1000)
 
 
 def createEngine(model: str) -> TranscriptionEngine:
-    # basic verison
     engine = TranscriptionEngine(
         model=model,
         lan=model,
         pcm_input=True,  # to skp FFmpeg and feed raw s16le bytes, the same kind that is used by pyaudio
     )
-
     return engine
 
 
@@ -59,7 +53,6 @@ async def run(model: str):
         except asyncio.CancelledError:
             pass
 
-    # Explain
     async def consume():
         try:
             async for r in results:
@@ -70,7 +63,6 @@ async def run(model: str):
     feed_task = asyncio.create_task(feed())
     consume_task = asyncio.create_task(consume())
 
-    # Explain
     try:
         await asyncio.gather(feed_task, consume_task)
     except KeyboardInterrupt:
