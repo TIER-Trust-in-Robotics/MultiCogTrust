@@ -4,8 +4,6 @@ import pyaudio
 
 # Refer to: https://github.com/QuentinFuxa/WhisperLiveKit for document on WhisperLive
 from whisperlivekit import TranscriptionEngine, AudioProcessor
-# Consider also using the mini backend version:  https://huggingface.co/mistralai/Voxtral-Mini-4B-Realtime-2602, works well with metal MLX!
-
 
 # Audio Const
 SAMPLE_RATE = 16000
@@ -17,13 +15,14 @@ CHUNK_SAMPLES = int(SAMPLE_RATE * CHUNCKS_MS / 1000)
 def createEngine(model: str) -> TranscriptionEngine:
     engine = TranscriptionEngine(
         model=model,
-        lan="en",
+        lan=model,
         pcm_input=True,  # to skp FFmpeg and feed raw s16le bytes, the same kind that is used by pyaudio
     )
     return engine
 
 
 # List of supported model can be found here: https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/docs/default_and_custom_models.md
+# Using the lightest weight model, "tiny.en". Works surprisingly well.
 async def run(model: str):
     engine = createEngine(model)
 
@@ -57,7 +56,7 @@ async def run(model: str):
     async def consume():
         try:
             async for r in results:
-                continue
+                pass
         except asyncio.CancelledError:
             pass
 
@@ -65,7 +64,7 @@ async def run(model: str):
     consume_task = asyncio.create_task(consume())
 
     try:
-        await asyncio.gather(feed_task, consume_task)  #
+        await asyncio.gather(feed_task, consume_task)
     except KeyboardInterrupt:
         pass
     finally:
@@ -74,16 +73,3 @@ async def run(model: str):
         stream.stop_stream()
         stream.close()
         audio.terminate()
-
-
-if __name__ == "__main__":
-    import argparse
-
-    p = argparse.ArgumentParser()
-    p.add_argument(
-        "--model",
-        default="tiny.en",
-        help="Whisper model (tiny.en, base, small, medium, large-v3)",
-    )
-    args = p.parse_args()
-    asyncio.run(run(args.model))

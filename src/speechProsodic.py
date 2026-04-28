@@ -1,9 +1,9 @@
 import opensmile
-import librosa
 import numpy as np
 
 """
-eGeMAPSv02 is an audio encoding that INTERSPEECH (largest conference in the field of speech) for "paralingual" tasks (emotion, personality, likability, etc.). See: https://ieeexplore.ieee.org/document/7160715 for more
+eGeMAPSv02 is an audio encoding that INTERSPEECH (largest conference in the field of speech) for "paralingual" tasks (emotion, personality, likability, etc.). See: https://ieeexplore.ieee.org/document/7160715 for more.
+
 """
 
 
@@ -14,45 +14,39 @@ class ProsodicFeatureExtractor:
             feature_level=opensmile.FeatureLevel.Functionals,
         )
 
-    def extract_trust_relevant(self, audio, sample_rate):
-        """
-        Features of interest:
-        Pitch variability and dynamism: deceptive
-        Speech rate change
-        Energy patterns
-        Voiced ration
-
-        CITATION NEEDED. CLAUDE TOLD ME THESE WHERE WHAT TO LOOK FOR.
-
-        """
-
-        # Pitch
-        f0, voice_flag, _ = librosa.pyin(audio, fmin=50, fmax=500, sr=sample_rate)
-        valid_f0 = f0[~np.isnan(f0)]
-
-        # Speech rate (zero crossing rate, i.e. how many times the audio signal meets zero)
-        zcr = librosa.feature.zero_crossing_rate(audio)[0]
-
-        # Energy contour via root mean square
-        rms = librosa.feature.rms(audio)[0]
-
-        pitch_features = [
-            np.mean(valid_f0),  # mean pitch
-            np.std(valid_f0),  # pitch variation
-            np.max(valid_f0) - np.min(valid_f0),  # pitch range
-            np.mean(np.abs(np.diff(valid_f0))),  # pitch dynamism
+    def extract(self, audio: np.ndarray, sample_rate=16000) -> dict:
+        prosodic_features_names = [
+            "F0semitoneFrom27.5Hz_sma3nz_amean",
+            "F0semitoneFrom27.5Hz_sma3nz_stddevNorm",
+            "F0semitoneFrom27.5Hz_sma3nz_pctlrange0-2",  # pitch range 20th-80th percentile
+            "F0semitoneFrom27.5Hz_sma3nz_meanRisingSlope",  # intonation shape
+            "F0semitoneFrom27.5Hz_sma3nz_meanFallingSlope",  # intonation shape
+            "loudness_sma3_amean",
+            "loudness_sma3_stddevNorm",
+            "loudnessPeaksPerSec",  # speach rate/rhythe proxy
+            "alphaRatioV_sma3nz_amean",  # energy balance around 1kHz (higher = tense, lower = relaxed)
+            "hammarbergIndexV_sma3nz_amean",  # energy peak ratio
+            "jitterLocal_sma3nz_amean",  # pitch pertubation (linked with stress)
+            "shimmerLocaldB_sma3nz_amean",  # amplitude perturbation
+            "HNRdBACF_sma3nz_amean",  # harmonics-to-noise ratio (breathy voice)
+            "F1frequency_sma3nz_amean",  # formant position (correlates with jaw motion)
+            "F2frequency_sma3nz_amean",  # formant position (correlates with tongue position)
+            "F3frequency_sma3nz_amean",  # formant position (color/brightness of voice)
+            "MeanVoicedSegmentLengthSec",  # pause pattern variability
+            "MeanUnvoicedSegmentLength",  # average pause duration
+            "StddevUnvoicedSegmentLength",  # speech fluency
         ]
 
-        features = np.concat(pitch_features + [zcr] + [rms])  # probabily correct
-
-        return np.array(features, dtype=np.float32)
-
-    def extract(self, audio: np.ndarray, sample_rate=16000) -> dict:
         feature_df = self.smile.process_signal(audio, sample_rate)
-        feature_vector = feature_df.values.flatten()
-        trust_features = self.extract_trust_relevant(audio, sample_rate)
+        trust_features = np.nan_to_num(
+            feature_df[prosodic_features_names].values.flatten(), nan=0.0
+        )
+        features = np.nan_to_num(feature_df.values.flatten(), nan=0.0)
+        feature_names = list(feature_df.columns)
 
         return {
-            "opensmile_features": feature_vector,  # 88-dim
-            "trust_features": trust_features,
+            "all_features": features,  # 88-dim
+            "feature_names": feature_names,
+            "trust_features": trust_features,  # 19-dim
+            "trust_feature_names:": prosodic_features_names,
         }
