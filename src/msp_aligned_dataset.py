@@ -6,12 +6,15 @@ import json
 import re
 import sys
 import time
-from collections import Counter
+from collections import Counter, OrderedDict
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 from datasets import Dataset
+import torch
+from torch.utils.data import Dataset as TorchDataset
+from transformers import AutoTokenizer
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -33,6 +36,100 @@ DATA_ROOT = ROOT / "data"
 MSP_ROOT = DATA_ROOT / "MSP-PODCAST"
 DEFAULT_OUTPUT_DIR = DATA_ROOT / "msp_aligned_features"
 TEXTGRID_EMPTY_WORDS = {"", "<eps>", "<sil>", "sil", "sp", "spn"}
+
+
+class LazyMSPSlidingFrameFusionDataset(TorchDataset):
+    """MSP sliding-frame fusion dataset with lazy audio shard loading."""
+
+    def __init__(
+        self,
+        output_dir: Path,
+        split: str,
+        tokenizer_name: str,
+        max_length: int,
+        limit: int | None = None,
+        shard_cache_size: int = 2,
+    ) -> None:
+        self.output_dir = output_dir
+        self.split = split
+        self.shard_cache_size = max(shard_cache_size, 1)
+        self._shard_cache: OrderedDict[int, np.lib.npyio.NpzFile] = OrderedDict()
+
+        metadata_path = output_dir / "metadata.jsonl"
+        shards_path = output_dir / "shards.json"
+        if not metadata_path.exists():
+            raise FileNotFoundError(f"Missing MSP metadata file: {metadata_path}")
+        if not shards_path.exists():
+            raise FileNotFoundError(f"Missing MSP shard manifest: {shards_path}")
+
+        shards = json.loads(shards_path.read_text())
+        self.audio_shards = {
+            int(shard["shard"]): output_dir / shard["audio_frames"] for shard in shards
+        }
+        self.records: list[dict[str, Any]] = []
+        with metadata_path.open() as metadata_file:
+            for line in metadata_file:
+                if not line.strip():
+                    continue
+                record = json.loads(line)
+                if record["split"] != split:
+                    continue
+                self.records.append(
+                    {
+                        "utterance_id": record["utterance_id"],
+                        "text": record["text"],
+                        "label": int(record["label"]),
+                        "feature_shard": int(record["feature_shard"]),
+                    }
+                )
+                if limit is not None and len(self.records) >= limit:
+                    break
+
+        tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, use_fast=True)
+        tokenized = tokenizer(
+            [record["text"] for record in self.records],
+            padding="max_length",
+            truncation=True,
+            max_length=max_length,
+        )
+        self.input_ids = tokenized["input_ids"]
+        self.attention_mask = tokenized["attention_mask"]
+
+    def __len__(self) -> int:
+        return len(self.records)
+
+    def __getitem__(self, idx: int) -> dict[str, Any]:
+        record = self.records[idx]
+        utterance_id = record["utterance_id"]
+        shard = self._get_audio_shard(record["feature_shard"])
+        return {
+            "input_ids": torch.tensor(self.input_ids[idx], dtype=torch.long),
+            "attention_mask": torch.tensor(self.attention_mask[idx], dtype=torch.long),
+            "audio_frame_features": np.asarray(shard[utterance_id], dtype=np.float32),
+            "label": record["label"],
+        }
+
+    def _get_audio_shard(self, shard_idx: int) -> np.lib.npyio.NpzFile:
+        if shard_idx in self._shard_cache:
+            archive = self._shard_cache.pop(shard_idx)
+            self._shard_cache[shard_idx] = archive
+            return archive
+
+        shard_path = self.audio_shards[shard_idx]
+        archive = np.load(shard_path, allow_pickle=False)
+        self._shard_cache[shard_idx] = archive
+        while len(self._shard_cache) > self.shard_cache_size:
+            _, evicted = self._shard_cache.popitem(last=False)
+            evicted.close()
+        return archive
+
+    def close(self) -> None:
+        for archive in self._shard_cache.values():
+            archive.close()
+        self._shard_cache.clear()
+
+    def __del__(self) -> None:
+        self.close()
 
 
 def parse_textgrid_words(path: Path) -> list[WordSpan]:
@@ -205,6 +302,7 @@ def build_msp_aligned_dataset(
     tolerance_sec: float = 0.25,
     progress_every: int = 1000,
     shard_size: int = 5000,
+    resume: bool = False,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     extractor = SlidingOpenSmileExtractor(
@@ -218,13 +316,24 @@ def build_msp_aligned_dataset(
     metadata_path = output_dir / "metadata.jsonl"
     audio_arrays: dict[str, np.ndarray] = {}
     word_arrays: dict[str, np.ndarray] = {}
+    existing_ids: set[str] = set()
+    existing_records: list[dict[str, Any]] = []
+    existing_report: dict[str, Any] = {}
     shard_manifest: list[dict[str, Any]] = []
     shard_idx = 0
     shard_records = 0
 
+    if resume:
+        existing_ids, existing_records, shard_manifest, existing_report = load_resume_state(
+            output_dir
+        )
+        if shard_manifest:
+            shard_idx = max(int(shard["shard"]) for shard in shard_manifest) + 1
+
     report: dict[str, Any] = {
         "utterances_discovered": 0,
         "included_utterances": 0,
+        "skipped_existing_utterances": 0,
         "missing_textgrid": 0,
         "invalid_word_spans": 0,
         "feature_extraction_failures": 0,
@@ -243,6 +352,7 @@ def build_msp_aligned_dataset(
             "tolerance_sec": tolerance_sec,
             "progress_every": progress_every,
             "shard_size": shard_size,
+            "resume": resume,
         },
     }
 
@@ -257,6 +367,7 @@ def build_msp_aligned_dataset(
             "msp-aligned "
             f"processed={processed}/{total_to_process} "
             f"included={report['included_utterances']} "
+            f"skipped_existing={report['skipped_existing_utterances']} "
             f"missing_textgrid={report['missing_textgrid']} "
             f"invalid_spans={report['invalid_word_spans']} "
             f"feature_failures={report['feature_extraction_failures']} "
@@ -267,12 +378,18 @@ def build_msp_aligned_dataset(
         )
 
     print_progress(0, force=True)
-    with metadata_path.open("w") as metadata_file:
+    metadata_mode = "a" if resume else "w"
+    with metadata_path.open(metadata_mode) as metadata_file:
         for base_record in iter_msp_utterances(msp_root):
             if limit is not None and report["included_utterances"] >= limit:
                 break
             report["utterances_discovered"] += 1
             utterance_id = base_record["utterance_id"]
+            if utterance_id in existing_ids:
+                report["skipped_existing_utterances"] += 1
+                print_progress(report["utterances_discovered"])
+                continue
+
             textgrid_path = Path(base_record["textgrid_path"])
             if not textgrid_path.exists():
                 report["missing_textgrid"] += 1
@@ -377,6 +494,10 @@ def build_msp_aligned_dataset(
         )
 
     feature_names = extractor.feature_names or []
+    if resume and not feature_names:
+        feature_names_path = output_dir / "feature_names.json"
+        if feature_names_path.exists():
+            feature_names = json.loads(feature_names_path.read_text())
     if report["included_utterances"] and len(feature_names) != 88:
         report["errors"].append(
             {
@@ -385,9 +506,15 @@ def build_msp_aligned_dataset(
             }
         )
 
-    (output_dir / "feature_names.json").write_text(json.dumps(feature_names, indent=2))
+    if feature_names:
+        (output_dir / "feature_names.json").write_text(json.dumps(feature_names, indent=2))
     (output_dir / "shards.json").write_text(json.dumps(shard_manifest, indent=2))
-    serializable_report = summarize_report(report, shard_manifest)
+    serializable_report = summarize_report(
+        report,
+        shard_manifest,
+        existing_records=existing_records,
+        existing_report=existing_report,
+    )
     print_progress(report["utterances_discovered"], force=True)
     (output_dir / "alignment_report.json").write_text(
         json.dumps(serializable_report, indent=2)
@@ -395,19 +522,102 @@ def build_msp_aligned_dataset(
     return serializable_report
 
 
+def load_resume_state(
+    output_dir: Path,
+) -> tuple[set[str], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    metadata_path = output_dir / "metadata.jsonl"
+    shards_path = output_dir / "shards.json"
+    report_path = output_dir / "alignment_report.json"
+
+    records: list[dict[str, Any]] = []
+    if metadata_path.exists():
+        records = [
+            json.loads(line)
+            for line in metadata_path.read_text().splitlines()
+            if line.strip()
+        ]
+
+    shards: list[dict[str, Any]] = []
+    if shards_path.exists():
+        shards = json.loads(shards_path.read_text())
+        for shard in shards:
+            audio_path = output_dir / shard["audio_frames"]
+            word_path = output_dir / shard["word_features"]
+            if not audio_path.exists() or not word_path.exists():
+                raise FileNotFoundError(
+                    f"Cannot resume: missing shard files for shard {shard['shard']}"
+                )
+
+    existing_report: dict[str, Any] = {}
+    if report_path.exists():
+        existing_report = json.loads(report_path.read_text())
+
+    existing_ids = {record["utterance_id"] for record in records}
+    return existing_ids, records, shards, existing_report
+
+
+def extend_report_from_records(
+    report: dict[str, Any],
+    records: list[dict[str, Any]],
+) -> None:
+    for record in records:
+        split = record["split"]
+        report["included_utterances"] += 1
+        report["split_counts"][split] += 1
+        report["label_counts"][split][record["label_code"]] += 1
+        report["frame_counts"].append(record["audio_frame_count"])
+        report["word_counts"].append(record["word_count"])
+        report["transcript_alignment"].append(record["transcript_alignment"])
+        if record["words"]:
+            mismatch = record["words"][-1]["end_sec"] - record["duration_sec"]
+        else:
+            mismatch = -record["duration_sec"]
+        report["duration_mismatch_sec"].append(mismatch)
+        report["words_without_audio_overlap"] += sum(
+            1 for value in record["word_audio_feature_mask"] if value == 0
+        )
+
+
 def summarize_report(
     report: dict[str, Any],
     shard_manifest: list[dict[str, Any]],
+    existing_records: list[dict[str, Any]] | None = None,
+    existing_report: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    if existing_records:
+        report = {
+            **report,
+            "duration_mismatch_sec": list(report["duration_mismatch_sec"]),
+            "frame_counts": list(report["frame_counts"]),
+            "word_counts": list(report["word_counts"]),
+            "transcript_alignment": list(report["transcript_alignment"]),
+            "label_counts": {
+                split: Counter(counts)
+                for split, counts in report["label_counts"].items()
+            },
+            "split_counts": Counter(report["split_counts"]),
+        }
+        extend_report_from_records(report, existing_records)
+    existing_report = existing_report or {}
     transcript_stats = report["transcript_alignment"]
     exact_matches = sum(1 for item in transcript_stats if item["same_normalized_text"])
     prefix_ratios = [item["exact_prefix_match_ratio"] for item in transcript_stats]
     return {
-        "utterances_discovered": report["utterances_discovered"],
+        "utterances_discovered": max(
+            report["utterances_discovered"],
+            existing_report.get("utterances_discovered", 0),
+        ),
         "included_utterances": report["included_utterances"],
+        "skipped_existing_utterances": report.get("skipped_existing_utterances", 0),
         "missing_textgrid": report["missing_textgrid"],
-        "invalid_word_spans": report["invalid_word_spans"],
-        "feature_extraction_failures": report["feature_extraction_failures"],
+        "invalid_word_spans": max(
+            report["invalid_word_spans"],
+            existing_report.get("invalid_word_spans", 0),
+        ),
+        "feature_extraction_failures": max(
+            report["feature_extraction_failures"],
+            existing_report.get("feature_extraction_failures", 0),
+        ),
         "words_without_audio_overlap": report["words_without_audio_overlap"],
         "duration_mismatch_sec": summarize_numeric(report["duration_mismatch_sec"]),
         "frame_counts": summarize_numeric(report["frame_counts"]),
@@ -429,7 +639,7 @@ def summarize_report(
         "label_codes": MSP_LABELS,
         "shards": shard_manifest,
         "config": report["config"],
-        "errors": report["errors"][:100],
+        "errors": (existing_report.get("errors", []) + report["errors"])[:100],
     }
 
 
@@ -474,6 +684,38 @@ def load_msp_aligned(
     )
 
 
+def load_msp_sliding_frame_fusion_datasets(
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+    tokenizer_name: str = "distilbert-base-uncased",
+    max_length: int = 128,
+    limit_train: int | None = None,
+    limit_test: int | None = None,
+    shard_cache_size: int = 2,
+) -> tuple[
+    LazyMSPSlidingFrameFusionDataset,
+    LazyMSPSlidingFrameFusionDataset,
+    int,
+    list[str],
+]:
+    train_dataset = LazyMSPSlidingFrameFusionDataset(
+        output_dir=output_dir,
+        split="train",
+        tokenizer_name=tokenizer_name,
+        max_length=max_length,
+        limit=limit_train,
+        shard_cache_size=shard_cache_size,
+    )
+    test_dataset = LazyMSPSlidingFrameFusionDataset(
+        output_dir=output_dir,
+        split="test",
+        tokenizer_name=tokenizer_name,
+        max_length=max_length,
+        limit=limit_test,
+        shard_cache_size=shard_cache_size,
+    )
+    return train_dataset, test_dataset, len(MSP_LABELS), MSP_LABEL_NAMES
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Build temporally aligned MSP-PODCAST text/prosody artifacts."
@@ -497,6 +739,11 @@ def parse_args() -> argparse.Namespace:
         default=5000,
         help="Number of included utterances per compressed NPZ shard.",
     )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Append missing records without rebuilding existing metadata/shard entries.",
+    )
     return parser.parse_args()
 
 
@@ -512,6 +759,7 @@ def main() -> None:
         tolerance_sec=args.tolerance_sec,
         progress_every=args.progress_every,
         shard_size=args.shard_size,
+        resume=args.resume,
     )
     print(json.dumps(report, indent=2))
 
