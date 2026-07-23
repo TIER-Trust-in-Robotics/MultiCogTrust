@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+.env
+.env.*
+.ipynb_checkpoints/
+.virtual_documents/
+.vscode/
+CLAUDE.md
+AGENTS.md
+
+# Local datasets and generated feature stores. Keep these on disk, not in Git.
+data/IEMOCAP_full_release/
+data/iemocap_aligned_features/
+data/processed/
+data/*.npz
+
+# Training checkpoints are large and reproducible from the source/configs.
+models/**/*.pt
