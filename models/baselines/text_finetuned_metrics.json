@@ -1,0 +1,309 @@
+{
+  "model": "text_finetuned_distilbert",
+  "dataset": "iemocap_aligned_features",
+  "train_size": 7867,
+  "test_size": 2170,
+  "num_labels": 11,
+  "label_names": [
+    "anger",
+    "happiness",
+    "excitement",
+    "neutral",
+    "sadness",
+    "frustration",
+    "fear",
+    "surprise",
+    "disgust",
+    "undefined",
+    "other"
+  ],
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 1.6838657435186484,
+      "train_accuracy": 0.35655268844540483,
+      "test_loss": 1.529978711594085,
+      "test_accuracy": 0.4235023041474654,
+      "test_macro_f1": 0.24075940691324996
+    },
+    {
+      "epoch": 2,
+      "train_loss": 1.3160448816235675,
+      "train_accuracy": 0.499682216855218,
+      "test_loss": 1.525560715149075,
+      "test_accuracy": 0.42626728110599077,
+      "test_macro_f1": 0.27775894212828856
+    },
+    {
+      "epoch": 3,
+      "train_loss": 1.0809680540770485,
+      "train_accuracy": 0.586246345493835,
+      "test_loss": 1.570026043895203,
+      "test_accuracy": 0.4345622119815668,
+      "test_macro_f1": 0.3065248445370107
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.8750995389688146,
+      "train_accuracy": 0.6669632642684632,
+      "test_loss": 1.6832861440797007,
+      "test_accuracy": 0.4382488479262673,
+      "test_macro_f1": 0.2990252232825638
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.7122331205644191,
+      "train_accuracy": 0.7292487606457354,
+      "test_loss": 1.84716872476419,
+      "test_accuracy": 0.4216589861751152,
+      "test_macro_f1": 0.29495824142530674
+    }
+  ],
+  "best_epoch": 3,
+  "test_loss": 1.570026043895203,
+  "test_accuracy": 0.4345622119815668,
+  "test_macro_f1": 0.3065248445370107,
+  "classification_report": {
+    "anger": {
+      "precision": 0.40444444444444444,
+      "recall": 0.5352941176470588,
+      "f1": 0.46075949367088603,
+      "support": 170
+    },
+    "happiness": {
+      "precision": 0.3404255319148936,
+      "recall": 0.22377622377622378,
+      "f1": 0.270042194092827,
+      "support": 143
+    },
+    "excitement": {
+      "precision": 0.5450819672131147,
+      "recall": 0.44481605351170567,
+      "f1": 0.4898710865561694,
+      "support": 299
+    },
+    "neutral": {
+      "precision": 0.4751552795031056,
+      "recall": 0.3984375,
+      "f1": 0.43342776203966005,
+      "support": 384
+    },
+    "sadness": {
+      "precision": 0.5566037735849056,
+      "recall": 0.4816326530612245,
+      "f1": 0.5164113785557988,
+      "support": 245
+    },
+    "frustration": {
+      "precision": 0.42579505300353354,
+      "recall": 0.6325459317585301,
+      "f1": 0.508975712777191,
+      "support": 381
+    },
+    "fear": {
+      "precision": 0.09090909090909091,
+      "recall": 0.1,
+      "f1": 0.09523809523809525,
+      "support": 10
+    },
+    "surprise": {
+      "precision": 0.3076923076923077,
+      "recall": 0.2222222222222222,
+      "f1": 0.2580645161290323,
+      "support": 18
+    },
+    "disgust": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 0
+    },
+    "undefined": {
+      "precision": 0.35196687370600416,
+      "recall": 0.3269230769230769,
+      "f1": 0.3389830508474576,
+      "support": 520
+    },
+    "other": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 0
+    }
+  },
+  "confusion_matrix": [
+    [
+      91,
+      0,
+      3,
+      5,
+      5,
+      46,
+      0,
+      0,
+      0,
+      20,
+      0
+    ],
+    [
+      2,
+      32,
+      44,
+      12,
+      6,
+      7,
+      0,
+      0,
+      0,
+      40,
+      0
+    ],
+    [
+      6,
+      19,
+      133,
+      32,
+      5,
+      23,
+      5,
+      3,
+      0,
+      73,
+      0
+    ],
+    [
+      9,
+      3,
+      12,
+      153,
+      23,
+      90,
+      0,
+      1,
+      0,
+      93,
+      0
+    ],
+    [
+      3,
+      2,
+      10,
+      21,
+      118,
+      48,
+      0,
+      1,
+      0,
+      42,
+      0
+    ],
+    [
+      44,
+      3,
+      5,
+      33,
+      13,
+      241,
+      0,
+      1,
+      0,
+      41,
+      0
+    ],
+    [
+      0,
+      0,
+      3,
+      0,
+      3,
+      2,
+      1,
+      0,
+      0,
+      1,
+      0
+    ],
+    [
+      7,
+      1,
+      1,
+      1,
+      1,
+      0,
+      0,
+      4,
+      0,
+      3,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      63,
+      34,
+      33,
+      65,
+      38,
+      109,
+      5,
+      3,
+      0,
+      170,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  ],
+  "config": {
+    "aligned_dir": "/Users/magi/Code/MultiCogTrust/data/iemocap_aligned_features",
+    "model_name": "distilbert-base-uncased",
+    "max_length": 128,
+    "epochs": 5,
+    "batch_size": 8,
+    "lr": 2e-05,
+    "weight_decay": 0.01,
+    "dropout": 0.2,
+    "device": "mps",
+    "limit_train": null,
+    "limit_test": null,
+    "output": "/Users/magi/Code/MultiCogTrust/models/baselines/text_finetuned_distilbert.pt",
+    "metrics_output": "/Users/magi/Code/MultiCogTrust/models/baselines/text_finetuned_metrics.json",
+    "freeze_text_encoder": false
+  },
+  "required_metric_keys_present": [
+    "best_epoch",
+    "classification_report",
+    "confusion_matrix",
+    "dataset",
+    "history",
+    "label_names",
+    "model",
+    "num_labels",
+    "test_accuracy",
+    "test_macro_f1",
+    "test_size",
+    "train_size"
+  ]
+}

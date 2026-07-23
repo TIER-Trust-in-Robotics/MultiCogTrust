@@ -1,0 +1,41 @@
+{
+  "aligned_dir": "/Users/magi/Code/MultiCogTrust/data/iemocap_aligned_features",
+  "tokenizer_name": "distilbert-base-uncased",
+  "max_length": 128,
+  "sample_count": 256,
+  "atol": 1e-05,
+  "equivalent_count": 3,
+  "equivalent_fraction": 0.01171875,
+  "mask_mismatches": 0,
+  "max_abs_diff": 0.00048828125,
+  "mean_max_abs_diff": 0.00023730099201202393,
+  "is_equivalent": false,
+  "examples": [
+    {
+      "utterance_id": "Ses01F_impro01_F000",
+      "max_abs_diff": 0.0001220703125,
+      "masks_equal": true
+    },
+    {
+      "utterance_id": "Ses01F_impro01_F001",
+      "max_abs_diff": 0.0001220703125,
+      "masks_equal": true
+    },
+    {
+      "utterance_id": "Ses01F_impro01_F002",
+      "max_abs_diff": 0.000244140625,
+      "masks_equal": true
+    },
+    {
+      "utterance_id": "Ses01F_impro01_F003",
+      "max_abs_diff": 0.000244140625,
+      "masks_equal": true
+    },
+    {
+      "utterance_id": "Ses01F_impro01_F004",
+      "max_abs_diff": 0.000244140625,
+      "masks_equal": true
+    }
+  ],
+  "interpretation": "Token-overlap pooling from sliding frames differs from existing word_audio_features."
+}
