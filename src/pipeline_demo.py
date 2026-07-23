@@ -63,8 +63,9 @@ def transcribe_worker(
     model: WhisperModel,
     seg_queue: queue.Queue,
     stop_event: threading.Event,
+    emotion_predictor=None,
 ):
-    """Pull speech segments from the queue and transcribe them."""
+    """Pull speech segments from the queue, transcribe, and (optionally) classify emotion."""
     seg_count = 0
     while not stop_event.is_set():
         try:
@@ -89,9 +90,31 @@ def transcribe_worker(
             sys.stdout.write(f"\r\033[K")
             print(f"  [{segment.start_time:6.1f}s - {segment.end_time:6.1f}s]  {text}")
 
-def main(model_name: str = "tiny.en", threshold: float = 0.5):
+            if emotion_predictor is not None:
+                prediction = emotion_predictor.predict(text, segment.samples)
+                probs = "  ".join(
+                    f"{name[:3]}={prediction.probabilities[name]:.2f}"
+                    for name in prediction.probabilities
+                )
+                print(
+                    f"      emotion: {prediction.label:>9s}  "
+                    f"trust={prediction.trust_proxy:.2f}  [{probs}]"
+                )
+
+def main(
+    model_name: str = "tiny.en",
+    threshold: float = 0.5,
+    emotion_checkpoint: str | None = None,
+):
     print(f"Loading Whisper model '{model_name}'...")
     whisper = WhisperModel(model_name, device="cpu", compute_type="int8")
+
+    emotion_predictor = None
+    if emotion_checkpoint:
+        print(f"Loading cross-modal emotion model '{emotion_checkpoint}'...")
+        from emotion_fusion_infer import CrossModalEmotionPredictor
+
+        emotion_predictor = CrossModalEmotionPredictor(checkpoint_path=emotion_checkpoint)
 
     print("Initialising SileroVAD...")
     vad = SileroVAD(threshold=threshold)
@@ -115,7 +138,7 @@ def main(model_name: str = "tiny.en", threshold: float = 0.5):
     )
     transcribe_thread = threading.Thread(
         target=transcribe_worker,
-        args=(whisper, seg_queue, stop_event),
+        args=(whisper, seg_queue, stop_event, emotion_predictor),
         daemon=True,
     )
 
@@ -141,6 +164,15 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--model", default="tiny.en", help="Whisper model name")
     p.add_argument("--threshold", type=float, default=0.5, help="VAD threshold")
+    p.add_argument(
+        "--emotion-checkpoint",
+        default=None,
+        help="Path to cross-modal emotion checkpoint (enables live emotion/trust output)",
+    )
     args = p.parse_args()
 
-    main(model_name=args.model, threshold=args.threshold)
+    main(
+        model_name=args.model,
+        threshold=args.threshold,
+        emotion_checkpoint=args.emotion_checkpoint,
+    )
