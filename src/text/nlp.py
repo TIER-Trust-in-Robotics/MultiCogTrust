@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from src import config
 from src.core.events import TextEmbeddingEvent, TranscriptEvent
-from src.textSentiment import TextHiddenStateEncoder
+from src.text.encoder import TextHiddenStateEncoder
 
 
 @dataclass(frozen=True)
