@@ -41,6 +41,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from src.iemocap_aligned_dataset import resolve_data_path  # noqa: E402
 from src.models import CrossModalTransformerFusionClassifier  # noqa: E402
 
 LABEL_MAP = {"ang": 0, "hap": 1, "exc": 1, "sad": 2, "neu": 3}
@@ -66,20 +67,30 @@ class Cached:
 
 def load_samples(metadata_path: str, data_root: str) -> list[Sample]:
     samples: list[Sample] = []
+    missing = 0
     with open(metadata_path) as handle:
         for line in handle:
             record = json.loads(line)
             code = record["label_code"]
             if code not in LABEL_MAP:
                 continue
-            raw_path = record["audio_path"]
-            idx = raw_path.find("data/IEMOCAP_full_release/")
-            local_path = os.path.join(data_root, raw_path[idx:])
-            if not os.path.exists(local_path):
+            local_path = resolve_data_path(
+                record["audio_path"], Path(data_root) / "data"
+            )
+            if not local_path.exists():
+                missing += 1
                 continue
             samples.append(
-                Sample(record["text"], local_path, LABEL_MAP[code], int(record["session"]))
+                Sample(record["text"], str(local_path), LABEL_MAP[code], int(record["session"]))
             )
+    if not samples:
+        raise FileNotFoundError(
+            f"No audio from {metadata_path} resolved under {data_root} "
+            f"({missing} paths missing); restore data/IEMOCAP_full_release/ "
+            "or pass --data-root"
+        )
+    if missing:
+        print(f"Warning: skipped {missing} utterances with missing audio")
     return samples
 
 

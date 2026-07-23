@@ -50,6 +50,25 @@ FRAME_SECONDS = 0.01
 SAMPLE_RATE = 16000
 
 
+def resolve_data_path(stored_path: str | Path, data_root: Path = DATA_ROOT) -> Path:
+    """Resolve a path recorded in a cached artifact against this checkout.
+
+    Cached metadata (e.g. ``metadata.jsonl``) stores absolute paths from
+    whichever machine generated it. Rebase everything after the last ``data``
+    component onto ``data_root`` so artifacts survive repo moves. Returns the
+    original path untouched if it exists or has no ``data`` component; callers
+    must still check ``exists()``.
+    """
+    path = Path(stored_path)
+    if path.exists():
+        return path
+    parts = path.parts
+    if "data" not in parts:
+        return path
+    tail_index = len(parts) - 1 - tuple(reversed(parts)).index("data")
+    return data_root.joinpath(*parts[tail_index + 1 :])
+
+
 @dataclass(frozen=True)
 class WordSpan:
     word: str
