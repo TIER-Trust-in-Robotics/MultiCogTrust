@@ -1,8 +1,8 @@
-"""Async shutdown helper funciton"""
+"""Async shutdown helper functions."""
 
 from __future__ import annotations
 import asyncio
-from collections.abc import Iterable  # what is this for
+from collections.abc import Iterable
 
 
 async def cancel_tasks(tasks: Iterable[asyncio.Task], timeout: float = 2.0) -> None:
@@ -14,16 +14,16 @@ async def cancel_tasks(tasks: Iterable[asyncio.Task], timeout: float = 2.0) -> N
         return
 
     try:
-        await asyncio.awit_for(
+        await asyncio.wait_for(
             asyncio.gather(*tasks, return_exceptions=True), timeout=timeout
         )
 
     except TimeoutError:
         pass
 
-async def wait_for_first_failure(tasks: Iterable[asyncio.Task]) -> BaseException | None: 
+async def wait_for_first_failure(tasks: Iterable[asyncio.Task]) -> BaseException | None:
     tasks = list(tasks)
-    done, _ = awiat asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
+    done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
 
     for task in done:
         exc = task.exception()
@@ -31,4 +31,3 @@ async def wait_for_first_failure(tasks: Iterable[asyncio.Task]) -> BaseException
             return exc
 
     return None
-
