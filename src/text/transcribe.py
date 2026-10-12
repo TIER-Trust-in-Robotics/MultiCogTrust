@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from src.core.events import SpeechSegment, TranscriptEvent
 from faster_whisper import WhisperModel
+from src.inference_pipeline import transcribe_samples
 
 
 @dataclass(frozen=True)
@@ -13,13 +14,13 @@ class WhisperConfig:
     language: str = "en"
     device: str = "cpu"  # test with cuda on Jetson!
     compute_type: str = "int8"
-    queue_get_timeout_sec: int = 0.5
-    queue_put_timeout_sec: int = 0.5
+    queue_get_timeout_sec: float = 0.5
+    queue_put_timeout_sec: float = 0.5
     beam_size: int = 1  # the number of candidate decoding
 
 
 async def _put_until_stopped(
-    output_queue: asyncio.Queue[str],
+    output_queue: asyncio.Queue[TranscriptEvent],
     transcription: TranscriptEvent,
     stop_event: asyncio.Event,
     timeout_sec: float,
@@ -38,11 +39,11 @@ async def run_transcribe_worker(
     stop_event: asyncio.Event,
     config: WhisperConfig,
 ) -> None:
-    transcriber = WhisperModel(
+    transcriber = await asyncio.to_thread(
+        WhisperModel,
         config.model_name,
         device=config.device,
         compute_type=config.compute_type,
-        beam_size=config.beam_size,
     )
     while not stop_event.is_set():
         try:
@@ -53,14 +54,13 @@ async def run_transcribe_worker(
         except TimeoutError:
             continue
 
-        segments, _ = transcriber.transcribe(
+        text = await asyncio.to_thread(
+            transcribe_samples,
+            transcriber,
             speech.samples,
             language=config.language,
-            beam_size=5,
-            vad_filter=False,
-        )  # look into beam size and what it effects
-
-        text = " ".join(s.text.strip() for s in segments).strip()
+            beam_size=config.beam_size,
+        )
         if not text:
             continue
 

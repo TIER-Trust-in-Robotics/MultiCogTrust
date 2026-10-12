@@ -1,0 +1,8 @@
+{
+  "initial_contract_path": "configs/week1/execution_contract.initial.json",
+  "initial_sha256": "ed10882a57c5568f0a51656ba14c0597f589355b6699c27bcf40414a6abaf00b",
+  "amended_contract_path": "configs/week1/execution_contract.json",
+  "amended_sha256": "30c8103f5d481a64ae25cdf36a09dfb02c9ed8adcf0549bc773e28e43b56eea1",
+  "reason": "User explicitly included first improvement experiment",
+  "test_predictions_allowed": false
+}

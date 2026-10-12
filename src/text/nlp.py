@@ -57,7 +57,7 @@ async def run_nlp_worker(
     output_queue: asyncio.Queue[TextEmbeddingEvent],
     stop_event: asyncio.Event,
     config_: NLPConfig,
-    encoder: TextHiddenStateEncoder,
+    encoder: TextHiddenStateEncoder | None = None,
 ) -> None:
     """Encode transcript events and publish token/word hidden states."""
 

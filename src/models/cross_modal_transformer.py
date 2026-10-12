@@ -7,7 +7,7 @@ The bidirectional cross-attention fusion and the cls/mean/max/min pooling are
 kept faithful to the original. The heavy ``bert-base-uncased`` /
 ``HuBERT-base`` encoders are swapped for distilled variants
 (``distilbert-base-uncased`` + ``ntu-spml/distilhubert``), taking the encoder
-stack from ~205M to ~50M parameters with the same fusion head.
+stack to ~90M parameters (~96M including the fusion head).
 
 Original fusion (per ``src/models/networks.py`` in the MemoCMT repo):
     text branch : MultiheadAttention(Q=audio, K=text, V=text) -> Linear -> LN
@@ -61,6 +61,9 @@ class CrossModalTransformerFusionClassifier(nn.Module):
         fusion_head_output_type: str = "min",
         freeze_text_encoder: bool = True,
         freeze_audio_encoder: bool = False,
+        text_revision: str | None = None,
+        audio_revision: str | None = None,
+        local_files_only: bool = False,
     ) -> None:
         super().__init__()
         if fusion_head_output_type not in {"cls", "mean", "max", "min"}:
@@ -68,8 +71,28 @@ class CrossModalTransformerFusionClassifier(nn.Module):
                 f"Invalid fusion_head_output_type: {fusion_head_output_type!r}"
             )
 
-        self.text_encoder = AutoModel.from_pretrained(text_model_name)
-        self.audio_encoder = AutoModel.from_pretrained(audio_model_name)
+        self.text_encoder = AutoModel.from_pretrained(
+            text_model_name, revision=text_revision, local_files_only=local_files_only
+        )
+        self.audio_encoder = AutoModel.from_pretrained(
+            audio_model_name, revision=audio_revision, local_files_only=local_files_only
+        )
+        self.model_config = dict(
+            num_labels=num_labels,
+            text_model_name=text_model_name,
+            audio_model_name=audio_model_name,
+            fusion_dim=fusion_dim,
+            num_attention_heads=num_attention_heads,
+            dropout=dropout,
+            linear_layer_output=list(linear_layer_output),
+            fusion_head_output_type=fusion_head_output_type,
+            text_revision=getattr(self.text_encoder.config, "_commit_hash", None)
+            or text_revision,
+            audio_revision=getattr(self.audio_encoder.config, "_commit_hash", None)
+            or audio_revision,
+        )
+        self.freeze_text_encoder = freeze_text_encoder
+        self.freeze_audio_encoder = freeze_audio_encoder
 
         text_dim = int(self.text_encoder.config.hidden_size)
         audio_dim = int(self.audio_encoder.config.hidden_size)
@@ -122,6 +145,15 @@ class CrossModalTransformerFusionClassifier(nn.Module):
 
         self.fusion_head_output_type = fusion_head_output_type
 
+    def train(self, mode: bool = True):
+        super().train(mode)
+        # Frozen encoders must produce the same features as the cached/live path.
+        if self.freeze_text_encoder:
+            self.text_encoder.eval()
+        if self.freeze_audio_encoder:
+            self.audio_encoder.eval()
+        return self
+
     def encode_text(
         self,
         input_ids: torch.Tensor,
@@ -133,12 +165,50 @@ class CrossModalTransformerFusionClassifier(nn.Module):
             attention_mask=attention_mask,
         ).last_hidden_state
 
-    def encode_audio(self, audio_input: torch.Tensor) -> torch.Tensor:
+    def encode_audio(
+        self,
+        audio_input: torch.Tensor,
+        audio_attention_mask: torch.Tensor | None = None,
+    ) -> torch.Tensor:
         """Return DistilHuBERT frame embeddings ``[B, T_audio, dim]``.
 
         ``audio_input`` is a raw 16 kHz waveform batch ``[B, num_samples]``.
         """
-        return self.audio_encoder(audio_input).last_hidden_state
+        return self._encode_audio_with_mask(audio_input, audio_attention_mask)[0]
+
+    def _encode_audio_with_mask(self, audio_input, audio_attention_mask):
+        if audio_input.ndim != 2 or audio_input.shape[1] == 0:
+            raise ValueError("Audio must have shape [batch, nonempty samples]")
+        mask = _validated_mask(audio_attention_mask, audio_input, "audio samples")
+        lengths = mask.sum(1)
+        expected = (
+            torch.arange(audio_input.shape[1], device=audio_input.device)[None]
+            < lengths[:, None]
+        )
+        if not torch.equal(mask, expected):
+            raise ValueError("Audio sample masks must be contiguous and right padded")
+        # HuBERT's group norm includes time. Masking attention alone cannot undo
+        # padding in that convolutional encoder. Encode each real length first.
+        if bool(mask.all()):
+            embeddings = self.audio_encoder(audio_input).last_hidden_state
+            return embeddings, torch.ones(
+                embeddings.shape[:2], device=embeddings.device, dtype=torch.bool
+            )
+        rows = [
+            self.audio_encoder(audio_input[i : i + 1, : int(length)]).last_hidden_state[
+                0
+            ]
+            for i, length in enumerate(lengths)
+        ]
+        embeddings = nn.utils.rnn.pad_sequence(rows, batch_first=True)
+        frame_lengths = torch.tensor(
+            [len(row) for row in rows], device=embeddings.device
+        )
+        frame_mask = (
+            torch.arange(embeddings.shape[1], device=embeddings.device)[None]
+            < frame_lengths[:, None]
+        )
+        return embeddings, frame_mask
 
     def forward(
         self,
@@ -149,12 +219,16 @@ class CrossModalTransformerFusionClassifier(nn.Module):
         output_attentions: bool = False,
     ) -> CrossModalFusionOutput:
         text_embeddings = self.encode_text(input_ids, attention_mask)
-        audio_embeddings = self.encode_audio(audio_input)
+        # forward accepts a waveform-sample mask; forward_from_embeddings
+        # accepts an encoder-frame mask. They are deliberately different sizes.
+        audio_embeddings, frame_mask = self._encode_audio_with_mask(
+            audio_input, audio_attention_mask
+        )
         return self.forward_from_embeddings(
             text_embeddings=text_embeddings,
             audio_embeddings=audio_embeddings,
             text_attention_mask=attention_mask,
-            audio_attention_mask=audio_attention_mask,
+            audio_attention_mask=frame_mask,
             output_attentions=output_attentions,
         )
 
@@ -173,8 +247,12 @@ class CrossModalTransformerFusionClassifier(nn.Module):
         Attention masks use the HF convention (1 = keep, 0 = pad) and are
         converted to ``key_padding_mask`` internally.
         """
-        text_key_padding = _to_key_padding_mask(text_attention_mask)
-        audio_key_padding = _to_key_padding_mask(audio_attention_mask)
+        text_mask = _validated_mask(text_attention_mask, text_embeddings, "text")
+        audio_mask = _validated_mask(
+            audio_attention_mask, audio_embeddings, "audio frames"
+        )
+        text_key_padding = ~text_mask
+        audio_key_padding = ~audio_mask
 
         # Text branch: audio queries, text keys/values.
         text_attention, text_attn_weights = self.text_attention(
@@ -201,7 +279,8 @@ class CrossModalTransformerFusionClassifier(nn.Module):
         )
 
         fusion_norm = self.dropout(torch.cat((text_norm, audio_norm), dim=1))
-        pooled = self._pool(fusion_norm)
+        # The first branch has audio queries; the second has text queries.
+        pooled = self._pool(fusion_norm, torch.cat((audio_mask, text_mask), dim=1))
 
         logits = self.classifier(self.head(self.dropout(pooled)))
         return CrossModalFusionOutput(
@@ -213,14 +292,36 @@ class CrossModalTransformerFusionClassifier(nn.Module):
             audio_attn_weights=audio_attn_weights if output_attentions else None,
         )
 
-    def _pool(self, fusion_norm: torch.Tensor) -> torch.Tensor:
+    def _pool(self, fusion_norm: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         if self.fusion_head_output_type == "cls":
-            return fusion_norm[:, 0, :]
+            first = mask.long().argmax(dim=1)
+            return fusion_norm[torch.arange(len(first), device=first.device), first]
         if self.fusion_head_output_type == "mean":
-            return fusion_norm.mean(dim=1)
+            return fusion_norm.masked_fill(~mask.unsqueeze(-1), 0).sum(
+                dim=1
+            ) / mask.sum(dim=1, keepdim=True)
         if self.fusion_head_output_type == "max":
-            return fusion_norm.max(dim=1)[0]
-        return fusion_norm.min(dim=1)[0]
+            return fusion_norm.masked_fill(~mask.unsqueeze(-1), -torch.inf).max(dim=1)[
+                0
+            ]
+        return fusion_norm.masked_fill(~mask.unsqueeze(-1), torch.inf).min(dim=1)[0]
+
+
+def _validated_mask(mask, values, name):
+    if values.shape[1] == 0:
+        raise ValueError(f"{name} sequence is empty")
+    if mask is None:
+        return torch.ones(values.shape[:2], dtype=torch.bool, device=values.device)
+    if mask.shape != values.shape[:2]:
+        raise ValueError(
+            f"{name} mask shape {tuple(mask.shape)} must match {tuple(values.shape[:2])}"
+        )
+    if not bool(((mask == 0) | (mask == 1)).all()):
+        raise ValueError(f"{name} mask must contain only 0 and 1")
+    mask = mask.to(device=values.device, dtype=torch.bool)
+    if not bool(mask.any(dim=1).all()):
+        raise ValueError(f"{name} contains an all-masked example")
+    return mask
 
 
 def _to_key_padding_mask(

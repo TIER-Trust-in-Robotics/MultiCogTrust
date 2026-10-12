@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "objective": "Execute week 1 of the model-quality roadmap",
+  "created_utc": "2026-10-11T16:16:33.862548+00:00",
+  "roadmap_sha256_at_start": "8251cca8f23de0252dc4e0a14f0ac4d4b7a658b6e5afca66ee8faa5da306a6f8",
+  "deliverables": [
+    "Resolve flagged MOSEI source identities; freeze original-feature and modified-raw-data protocols and test-exposure records",
+    "Three-seed larger BERT/HuBERT-base IEMOCAP reference on the existing exact development split and crop",
+    "MOSEI LMF reference on checksum-verified MMSA features, followed by MulT when the LMF pipeline passes; preserve validation-only selection",
+    "Document model comparisons, evidence, limitations and reproducible commands; verify all acceptance requirements",
+    "One preregistered targeted quality improvement experiment with three seeds and matched baseline evaluation; retain the baseline if quality does not improve"
+  ],
+  "possible_day5_extension": "First targeted improvement experiment spans roadmap days 5-6; user preference pending, independent reference work proceeds",
+  "iemocap": {
+    "seeds": [
+      42,
+      43,
+      44
+    ],
+    "epochs": 20,
+    "batch_size": 16,
+    "optimizer": "Adam",
+    "learning_rate": 0.0001,
+    "train_sessions": [
+      1,
+      2,
+      3
+    ],
+    "validation_session": 4,
+    "reserved_test_session": 5,
+    "max_audio_sec": 6.0,
+    "max_tokens": 297,
+    "selection_metric": "validation_macro_f1",
+    "encoders_frozen": true,
+    "fusion": "existing masked MemoCMT-style implementation",
+    "tuning_trials_per_seed": 1,
+    "source_contract": "same label view, samples, crop, optimizer and budget as existing distilled reference",
+    "config_files": {
+      "42": {
+        "path": "configs/week1/iemocap_base_seed42.json",
+        "sha256": "ed12ce32282f47464b88681e0b84452dbcfdbfa39e0a14a1a5c9c83551121981"
+      },
+      "43": {
+        "path": "configs/week1/iemocap_base_seed43.json",
+        "sha256": "6235f13b0a040320cabd2ee25a3fdeeed498e38a00d4594ca66b9870345c6b12"
+      },
+      "44": {
+        "path": "configs/week1/iemocap_base_seed44.json",
+        "sha256": "f02f6395095b15da432291b580207886c60e1a99b56f4f7b4f8f1663472eb1a1"
+      }
+    }
+  },
+  "mosei": {
+    "native_task": "continuous sentiment regression",
+    "feature_release_sha256_expected": "ad8b23d50557045e7d47959ce6c5b955d8d983f2979c7d9b7b9226f6dd6fec1f",
+    "mmsa_commit": "a94e65d07fa1ae0d44e552390074b29b0898edfd",
+    "seeds": [
+      42,
+      43,
+      44
+    ],
+    "primary_selection": "validation_MAE",
+    "test_predictions_allowed": false,
+    "model_hyperparameters": "pin released MOSEI configuration after inspecting the upstream files, before training; no validation-driven search in this reference pass"
+  },
+  "invariants": [
+    "No Session 5 model inference or feature encoding",
+    "No MOSEI test predictions",
+    "Do not replace deployment checkpoints",
+    "No pooling sentiment and emotion targets",
+    "Preserve raw data and previous experiments",
+    "Do not compare modified raw-data validation scores directly with published original-feature test scores"
+  ],
+  "day5_extension": "User explicitly requested including the first targeted improvement experiment"
+}

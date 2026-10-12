@@ -1,4 +1,6 @@
 __pycache__/
+.pytest_cache/
+.ruff_cache/
 *.py[cod]
 .DS_Store
 .env
@@ -21,3 +23,8 @@ data/*.npz
 
 # Training checkpoints are large and reproducible from the source/configs.
 models/**/*.pt
+
+# Licensed dataset files and derived data (public repo)
+docs/MSP-Podcast/
+docs/*.npz
+models/**/*.validation.jsonl

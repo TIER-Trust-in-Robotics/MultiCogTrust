@@ -1,0 +1,32 @@
+{
+  "created_utc": "2026-10-11T16:28:42.330409+00:00",
+  "experiment": "iemocap_label_smoothing_01",
+  "hypothesis": "Reduce overconfidence/overfitting observed in baseline learning curves; inspect neutral recall and actual ASR transfer",
+  "fixed_change": "CrossEntropyLoss label_smoothing=0.1; no other hyperparameter changes",
+  "primary_metric": "reference transcript validation macro F1",
+  "secondary_metrics": [
+    "validation UAR",
+    "per-class recall",
+    "actual tiny.en ASR macro F1 with all 1031 samples and four abstentions"
+  ],
+  "budget": "One fixed change, 20 epochs per seed, seeds 42/43/44, same baseline initialization order and shuffle",
+  "selection": "Best epoch per seed by reference validation macro F1, before ASR diagnostic; compare paired seed deltas",
+  "acceptance": "Report all seeds. Favor existing baseline unless mean macro F1 and actual-ASR diagnostic both improve; no deployment replacement in week1",
+  "test_predictions_allowed": false,
+  "configs": {
+    "42": {
+      "path": "configs/week1/iemocap_smoothing_seed42.json",
+      "sha256": "644c6a8fa092234bd8f3e779f5d4b9ae46b9b61f12eab0a088977e62bc3c9a16"
+    },
+    "43": {
+      "path": "configs/week1/iemocap_smoothing_seed43.json",
+      "sha256": "184953a7ca5c976d72f0b969ec039378c07b7b633702240919addffb9093888d"
+    },
+    "44": {
+      "path": "configs/week1/iemocap_smoothing_seed44.json",
+      "sha256": "8c01eb314c1cc55260ca1307f9e8c3f7a3aed99362c6152b742e13719d5c5ebd"
+    }
+  },
+  "trainer_sha256": "34a29be5f25e1825bb408138082aad602944becaf3d17eab4789086b9d10be13",
+  "default_behavior": "Baseline configs omit label_smoothing and retain 0.0"
+}

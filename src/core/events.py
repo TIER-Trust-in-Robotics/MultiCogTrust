@@ -15,6 +15,7 @@ class AudioChunk:
     timestamp: float
     sample_rate: int
     samples: np.ndarray
+    discontinuity: bool = False
 
     @property
     def duration(self) -> float:
@@ -31,6 +32,8 @@ class SpeechSegment:
     end_time: float
     sample_rate: int
     samples: np.ndarray
+    speech_end_time: float | None = None
+    end_reason: str = "provided"
 
 
 @dataclass(frozen=True)

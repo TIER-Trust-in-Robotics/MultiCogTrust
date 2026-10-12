@@ -1,18 +1,14 @@
-"""Compare MemoCMT training protocols on IEMOCAP (4-class).
+"""Legacy exploratory split comparison on IEMOCAP (4-class).
 
-Runs TWO protocols back-to-back on the SAME frozen DistilBERT + DistilHuBERT
-features, so the only variable is the train/test split:
+This is NOT a MemoCMT paper reproduction. Its random 80/10/10 partition differs
+from the released two-stage sklearn split (approximately 81/9/10), and the
+encoders and audio crop also differ. A split changes example composition and
+training-set size as well as speaker overlap, so the score gap does not isolate
+speaker leakage. The session protocol is a single held-out session, not full
+leave-one-session-out cross-validation.
 
-  1. paper-replication  : random 80/10/10, speaker-DEPENDENT (same actors in
-     train and test), matching MemoCMT's released preprocess.py + seed 0.
-     -> directly comparable to their reported IEMOCAP UA 81.33 / WA 81.85.
-  2. session-independent: leave-one-session-out (Session 5 held out = unseen
-     speakers), the rigorous protocol that matters for HRI deployment.
-
-Both FREEZE the encoders and train only the cross-modal fusion + head, matching
-MemoCMT's released config (text_unfreeze=False, audio_unfreeze=False). Encoder
-embeddings are computed once and reused across both protocols, so the gap
-between the two numbers isolates the effect of speaker leakage.
+WARNING: this legacy command encodes all five sessions and evaluates test data.
+Use benchmark_controls.py for development with Session 5 reserved.
 
 Example:
     PYTORCH_ENABLE_MPS_FALLBACK=1 uv run python src/compare_iemocap_protocols.py \
@@ -47,7 +43,6 @@ from src.models import CrossModalTransformerFusionClassifier  # noqa: E402
 LABEL_MAP = {"ang": 0, "hap": 1, "exc": 1, "sad": 2, "neu": 3}
 LABEL_NAMES = ["anger", "happiness", "sadness", "neutral"]
 SAMPLE_RATE = 16000
-PAPER = {"UA": 0.8133, "WA": 0.8185}
 
 
 @dataclass
@@ -287,7 +282,7 @@ def main() -> None:
     del encoder
 
     tr, va, te = split_random(len(samples), args.split_seed, args.val_frac, 0.1)
-    paper = train_protocol("paper-replication", cache, tr, va, te, args, args.train_device)
+    paper = train_protocol("random-exploratory", cache, tr, va, te, args, args.train_device)
 
     tr, va, te = split_session(samples, args.test_session, args.val_frac, args.split_seed)
     session = train_protocol("session-independent", cache, tr, va, te, args, args.train_device)
@@ -296,11 +291,11 @@ def main() -> None:
     print(f"COMPARISON [{args.tag}] (4-class IEMOCAP, frozen encoders, {args.fusion_head} agg)")
     print("=" * 58)
     print(f"{'protocol':<26}{'WA':>8}{'UA':>8}")
-    print(f"{'MemoCMT paper (reported)':<26}{PAPER['WA']:>8.3f}{PAPER['UA']:>8.3f}")
+    print("MemoCMT's reported scores use a different protocol and are not ranked here.")
     print(f"{'random 80/10/10':<26}{paper['WA']:>8.3f}{paper['UA']:>8.3f}")
     print(f"{'session-independent':<26}{session['WA']:>8.3f}{session['UA']:>8.3f}")
     print(
-        f"\nspeaker-leakage gap (random - session): "
+        f"\nObserved split difference (random - session), not a causal leakage estimate: "
         f"WA {paper['WA'] - session['WA']:+.3f}  UA {paper['UA'] - session['UA']:+.3f}"
     )
 

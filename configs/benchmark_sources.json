@@ -1,0 +1,45 @@
+{
+  "retrieved_utc": "2026-10-11T02:06:19.557294+00:00",
+  "sources": [
+    {
+      "name": "cmu_mosei_folds",
+      "repository": "CMU-MultiComp-Lab/CMU-MultimodalSDK",
+      "commit": "4f2eadcd7e7b9e20e83b868cdad385b41830285c",
+      "url": "https://raw.githubusercontent.com/CMU-MultiComp-Lab/CMU-MultimodalSDK/4f2eadcd7e7b9e20e83b868cdad385b41830285c/mmsdk/mmdatasdk/dataset/standard_datasets/CMU_MOSEI/cmu_mosei_std_folds.py",
+      "path": "data/processed/benchmarks/protocol_sources/cmu_mosei_folds.py",
+      "sha256": "4e13a2f538cf02ab56144eb2a91ca48a4024ce64faaae790ab9ff1c3f399b473"
+    },
+    {
+      "name": "mmsa_metrics",
+      "repository": "thuiar/MMSA",
+      "commit": "a94e65d07fa1ae0d44e552390074b29b0898edfd",
+      "url": "https://raw.githubusercontent.com/thuiar/MMSA/a94e65d07fa1ae0d44e552390074b29b0898edfd/src/MMSA/utils/metricsTop.py",
+      "path": "data/processed/benchmarks/protocol_sources/mmsa_metrics.py",
+      "sha256": "5d6ce6d8a6442a94d280e77da6641edf13b097b9015881173e9a3b9a1eb4ac94"
+    },
+    {
+      "name": "memocmt_preprocess",
+      "repository": "tpnam0901/MemoCMT",
+      "commit": "d3248703e755319736b805fd6b0c2e8ab6089160",
+      "url": "https://raw.githubusercontent.com/tpnam0901/MemoCMT/d3248703e755319736b805fd6b0c2e8ab6089160/scripts/preprocess.py",
+      "path": "data/processed/benchmarks/protocol_sources/memocmt_preprocess.py",
+      "sha256": "d9ff6a3d73f9d9fa2281097d135198fcdb68c4c68b0a8efb43bdcba67f67353f"
+    },
+    {
+      "name": "memocmt_config",
+      "repository": "tpnam0901/MemoCMT",
+      "commit": "d3248703e755319736b805fd6b0c2e8ab6089160",
+      "url": "https://raw.githubusercontent.com/tpnam0901/MemoCMT/d3248703e755319736b805fd6b0c2e8ab6089160/src/configs/hubert_base.py",
+      "path": "data/processed/benchmarks/protocol_sources/memocmt_config.py",
+      "sha256": "19744997fc79079839fef434a416ec32ba5fa2c0b29e8abfc10c079281c785c6"
+    },
+    {
+      "name": "mmsa_reported_results",
+      "repository": "thuiar/MMSA",
+      "commit": "a94e65d07fa1ae0d44e552390074b29b0898edfd",
+      "url": "https://raw.githubusercontent.com/thuiar/MMSA/a94e65d07fa1ae0d44e552390074b29b0898edfd/results/result-stat.md",
+      "path": "data/processed/benchmarks/protocol_sources/mmsa_reported_results.md",
+      "sha256": "9861a7ca84477a97627c360f8568a9db6dfc06b97360e93cbc67d901d683c388"
+    }
+  ]
+}
