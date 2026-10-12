@@ -25,6 +25,6 @@ data/*.npz
 models/**/*.pt
 
 # Licensed dataset files and derived data (public repo)
-docs/MSP-Podcast/
+MSP-Podcast/
 docs/*.npz
 models/**/*.validation.jsonl
