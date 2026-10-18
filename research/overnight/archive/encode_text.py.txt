@@ -1,0 +1,93 @@
+"""Phase 2 text sources: dialogue context strings, encoded with the frozen DistilBERT (float16).
+
+Each scored line becomes "{context lines, oldest first} [SEP] {current line}" (the string form the
+live demo feeds model B). Variants:
+  other     the other speaker's most recent line
+  ownother  own previous line and the other speaker's most recent line, in time order
+  own2      own two previous lines
+Suffix ref = reference transcripts (Sessions 1-4); asr = Whisper for every line (Session 4);
+hri = the other speaker's line as exact text (as a robot's scripted line would be) while the
+participant's own lines are Whisper (Session 4). Empty transcripts are skipped as context, and
+an empty current transcript gets no file (deployment abstains). If the string exceeds the token
+limit, the oldest context line is dropped first, so the current line is never truncated.
+"""
+import json
+import sys
+from collections import defaultdict
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+import numpy as np
+import torch
+from transformers import AutoTokenizer
+
+from harness import CONFIG, OUT, ROOT, make_model
+from src.emotion_checkpoint import EMOTION_LABEL_MAP
+from src.prepare_iemocap import DEFAULT_METADATA
+
+rows = [r for r in map(json.loads, Path(DEFAULT_METADATA).read_text().splitlines()) if r["session"] in (1, 2, 3, 4)]
+asr = {}
+for path in (ROOT / "data/processed/mvp/asr_validation/transcripts.jsonl",
+             ROOT / "data/processed/mvp/asr_train/transcripts_s4_unscored.jsonl"):
+    for line in path.read_text().splitlines():
+        r = json.loads(line)
+        asr[r["utterance_id"]] = r["text"].strip()
+dialogs = defaultdict(list)
+for r in rows:
+    dialogs[r["dialog_id"]].append(r)
+for seq in dialogs.values():
+    seq.sort(key=lambda r: r["dialog_start_sec"])
+
+torch.set_num_threads(2)
+tokenizer = AutoTokenizer.from_pretrained(CONFIG["text_model_name"], revision=CONFIG["text_revision"], local_files_only=True)
+model = make_model("mps").eval()
+
+
+def text_of(r, mode, own):
+    """Transcript of row r as seen in this condition (own lines vs the other speaker's)."""
+    if mode == "ref" or (mode == "hri" and not own):
+        return r["text"].strip()
+    return asr.get(r["utterance_id"], "")
+
+
+def build(variant, mode):
+    out_dir = OUT / f"text_{variant}{mode}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    made = 0
+    for seq in dialogs.values():
+        if mode != "ref" and seq[0]["session"] != 4:
+            continue
+        for i, r in enumerate(seq):
+            current = text_of(r, mode, own=True)
+            path = out_dir / f"{r['utterance_id']}.npy"
+            if r["label_code"] not in EMOTION_LABEL_MAP or not current or path.exists():
+                continue
+            earlier = seq[:i]
+            own = [e for e in earlier if e["speaker"] == r["speaker"] and text_of(e, mode, True)]
+            other = [e for e in earlier if e["speaker"] != r["speaker"] and text_of(e, mode, False)]
+            if variant == "other":
+                context = other[-1:]
+            elif variant == "ownother":
+                context = sorted(own[-1:] + other[-1:], key=lambda e: e["dialog_start_sec"])
+            else:  # own2
+                context = own[-2:]
+            parts = [text_of(e, mode, e["speaker"] == r["speaker"]) for e in context] + [current]
+            while True:
+                tokens = tokenizer(" [SEP] ".join(parts), return_tensors="pt")
+                if tokens["input_ids"].shape[1] <= CONFIG["max_tokens"] or len(parts) == 1:
+                    break
+                parts = parts[1:]
+            tokens = tokenizer(" [SEP] ".join(parts), return_tensors="pt", truncation=True, max_length=CONFIG["max_tokens"])
+            with torch.inference_mode():
+                emb = model.encode_text(tokens["input_ids"].to("mps"), tokens["attention_mask"].to("mps"))[0]
+            np.save(path, emb.cpu().numpy().astype(np.float16))
+            made += 1
+    print(f"text_{variant}{mode}: {made} encoded", flush=True)
+
+
+if __name__ == "__main__":
+    for variant in ("other", "ownother", "own2"):
+        for mode in ("ref", "asr", "hri"):
+            if variant == "own2" and mode == "hri":
+                continue  # own lines only: identical to own2asr
+            build(variant, mode)

@@ -1,0 +1,202 @@
+"""Require complete evidence for phases 1-4; replay every new saved fusion head.
+
+Run after the bounded experiment controller and dimension analysis finish,
+before temporary cache cleanup. Replays validate serialization and predictions;
+they do not choose models or refit any hyperparameter on Session 4.
+"""
+
+import csv
+import json
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).parent))
+import numpy as np
+import torch
+from threadpoolctl import threadpool_limits
+
+from calibration import evaluate_set, scaled
+from dimensions import regression_metrics
+from harness import CONFIG, OUT, ROOT, Embeddings, make_model, predict, scored_samples
+from metrics import LABEL, META, f1, load, oof, scored
+from src.emotion_checkpoint import load_checkpoint_weights, read_checkpoint
+from src.iemocap_embedding_cache import sha256, write_json
+
+
+def read(name):
+    return json.loads((OUT / name).read_text())
+
+
+def main():
+    summaries = [read(f"phase{i}_summary.json") for i in (1, 2, 3, 4)]
+    assert all(row["finished"] for row in summaries)
+    assert read("phase2_job.json")["status"] == "finished"
+    context = read("verified_context_cache.json")
+    assert context["passed"]
+    for source in context["sources"]:
+        directory = OUT / f"text_{source['source']}"
+        assert sha256(directory / "manifest.jsonl") == source["manifest_sha256"]
+        assert sha256(directory / "contract.json") == source["contract_sha256"]
+    phase1, phase2, phase3, phase4 = summaries
+    assert phase3["source_sha256"] == sha256(Path(__file__).with_name("dimensions.py"))
+    assert phase4["source_sha256"] == sha256(Path(__file__).with_name("calibration.py"))
+    assert phase1["analyzer_sha256"] == sha256(Path(__file__).with_name("analyze_phase1.py"))
+    inputs = read("encoder_input_audit.json")
+    assert inputs["passed"] and inputs["rows"] == 7869
+    assert inputs["manifest_sha256"] == sha256(OUT / "encoder_input_manifest.jsonl")
+    assert read("legacy_prev_cache_audit.json")["passed"]
+    tests = read("tests_report.json")
+    assert tests["passed"] and tests["count"] == 88
+    assert all(sha256(ROOT / path) == fingerprint for path, fingerprint in tests["test_sha256"].items())
+    precision = read("precision_control_summary.json")
+    assert precision["finished"] and precision["training_runs"] == 8
+    assert read("precision_control_job.json")["status"] == "finished"
+    for condition in ("ref", "asr"):
+        directory = OUT / f"text_prev16{condition}"
+        contract = json.loads((directory / "contract.json").read_text())
+        assert sha256(directory / "manifest.jsonl") == contract["manifest_sha256"]
+        for row in map(json.loads, (directory / "manifest.jsonl").read_text().splitlines()):
+            uid = row["utterance_id"]
+            assert uid in META
+            original = Path(contract["source"]) / f"{uid}.npy"
+            path = directory / f"{uid}.npy"
+            assert sha256(path) == row["feature_sha256"] and sha256(original) == row["source_sha256"]
+            np.testing.assert_array_equal(np.load(path, allow_pickle=False), np.load(original, allow_pickle=False).astype(np.float16))
+    assert phase1["runs"] == 40 and phase2["training_runs"] == 24
+    assert phase1["prediction_sha256"] == phase4["prediction_hashes"]
+    for tag, fingerprint in phase1["prediction_sha256"].items():
+        assert sha256(OUT / "runs" / f"{tag}.npz") == fingerprint
+
+    # Reconstruct the OOF-only calibration fits and fixed confidence decisions.
+    calibration_checks = []
+    train_ids = scored((1, 2, 3))
+    for recipe, reference in (("ref", "reference"), ("prev", "prevref")):
+        for result in phase4["runs"][recipe]:
+            seed = result["seed"]
+            fit_path = OUT / "calibration_fits" / f"{recipe}_s{seed}.json"
+            fit = json.loads(fit_path.read_text())
+            assert sha256(fit_path) == result["fit_sha256"]
+            assert set(fit["fit_ids"]) == set(train_ids) and fit["fit_sessions"] == [1, 2, 3]
+            predictions = oof(recipe, seed, reference)
+            p = np.array([predictions[uid] for uid in train_ids], dtype=np.float64)
+            q = scaled(p, fit["temperature"])
+            assert np.array_equal(p.argmax(1), q.argmax(1)) and np.allclose(q.sum(1), 1)
+            truth = np.array([LABEL[uid] for uid in train_ids])
+            nll = lambda t: -np.log(np.clip(scaled(p, t)[np.arange(len(truth)), truth], 1e-12, 1)).mean()
+            assert nll(fit["temperature"]) <= min(nll(fit["temperature"] * .99), nll(fit["temperature"] * 1.01)) + 1e-9
+            for target, threshold in zip(fit["target_coverages"], fit["thresholds"]):
+                expected = 0. if target == 1 else np.quantile(q.max(1), 1 - target)
+                assert abs(expected - threshold) < 1e-7
+            assert result["oof_reference"] == evaluate_set(train_ids, predictions, fit["temperature"], fit["thresholds"])
+            asr = "asr" if recipe == "ref" else "prevasr"
+            for condition, text in (("reference", reference), ("asr", asr)):
+                assert result[f"session4_{condition}"] == evaluate_set(scored((4,)), load(f"full_{recipe}_s{seed}", f"4:{text}"), fit["temperature"], fit["thresholds"])
+            calibration_checks.append({"recipe": recipe, "seed": seed, "fit_sha256": sha256(fit_path)})
+
+    selection = read("phase2_selection.json")
+    variants = ("causalother", "causalownother", "causalown2")
+    assert selection["selected_variant"] == max(variants, key=lambda v: selection["oof"][v]["f1_mean"])
+    assert sha256(OUT / "phase2_selection.json") == phase2["selection_sha256"]
+    torch.set_num_threads(2)
+    model = make_model("cpu")
+    # Cached heads only: avoid allocating frozen encoder copies on the GPU.
+    for name, module in model.named_children():
+        if name not in ("text_encoder", "audio_encoder"):
+            module.to("mps")
+    groups = scored_samples()
+    replay_checks = []
+    for variant in (*variants, "prev16"):
+        for seed in (42, 43):
+            for held in (1, 2, 3, None):
+                tag = f"loso{held}_{variant}_s{seed}" if held else f"full_{variant}_s{seed}"
+                provenance = read(f"runs/{tag}.json")
+                train_sessions = [k for k in (1, 2, 3) if k != held]
+                assert provenance["train_sessions"] == train_sessions
+                assert set(provenance["train_utterance_ids"]) == set(scored(train_sessions))
+                assert provenance["epochs"] == 8 and provenance["weight_average_epochs"] == [3, 8]
+                assert provenance["final_only_eval"] and not provenance["test_evaluated"]
+                assert provenance["trainer_sha256"] == sha256(Path(__file__).with_name("harness.py"))
+                assert sha256(OUT / "runs" / f"{tag}.npz") == provenance["predictions_sha256"]
+                checkpoint_path = OUT / "checkpoints" / f"{tag}.pt"
+                assert sha256(checkpoint_path) == provenance["checkpoint_sha256"]
+                payload = read_checkpoint(checkpoint_path, "iemocap_emotion_4")
+                assert payload["weights_scope"] == "fusion_only"
+                assert all(torch.isfinite(value).all() for value in payload["model_state_dict"].values())
+                load_checkpoint_weights(model, payload)
+                for condition, count in provenance["eval_counts"].items():
+                    session, source = condition.split(":")
+                    dataset = Embeddings(groups[int(session)], source)
+                    original = load(tag, condition)
+                    ids = [sample.utterance_id for sample in dataset.samples]
+                    assert len(ids) == count and set(ids) == set(original)
+                    replayed = predict(model, dataset, "mps")
+                    saved = np.array([original[uid] for uid in ids])
+                    np.testing.assert_allclose(replayed, saved, atol=3e-5, rtol=1e-4)
+                    replay_checks.append({"tag": tag, "condition": condition, "n": count,
+                                          "max_probability_difference": float(np.abs(replayed - saved).max())})
+                print(f"Replayed {tag}", flush=True)
+    del model
+    torch.mps.empty_cache()
+
+    data = np.load(OUT / "iemocap_dimension_features.npz", allow_pickle=False)
+    assert sha256(OUT / "iemocap_dimension_features.npz") == read("iemocap_dimension_features.json")["features_sha256"]
+    saved = np.load(OUT / "iemocap_dimension_predictions.npz", allow_pickle=False)
+    ids, sessions, truth = data["ids"], data["session"], data["target"]
+    assert set(ids) == set(META) and len(ids) == len(set(ids)) == 7869
+    assert np.array_equal(saved["ids"], ids) and np.array_equal(saved["truth"], truth)
+    assert np.array_equal(truth, np.array([META[uid]["vad"] for uid in ids]))
+    train, valid = sessions < 4, sessions == 4
+    assert int(train.sum()) == 5766 and int(valid.sum()) == 2103
+    baselines = {}
+    with threadpool_limits(limits=2):
+        for modality in ("text", "audio", "both"):
+            x = np.concatenate([data["text"], data["audio"]], 1) if modality == "both" else data[modality]
+            assert np.isfinite(x).all()
+            fit = np.load(OUT / f"dimension_ridge_{modality}.npz", allow_pickle=False)
+            np.testing.assert_allclose(fit["mean"], x[train].astype(np.float64).mean(0), atol=1e-9)
+            np.testing.assert_allclose(fit["target_mean"], ((truth[train] - 1) / 4).mean(0), atol=1e-12)
+            predicted = ((x[valid].astype(np.float64) - fit["mean"]) / fit["scale"]) @ fit["weights"] + fit["target_mean"]
+            np.testing.assert_allclose(predicted * 4 + 1, saved[f"{modality}_s4"], atol=1e-9)
+            chosen = read(f"phase3_selection_{modality}.json")
+            assert chosen["selection_sessions"] == [1, 2, 3]
+            expected = np.array(chosen["grid"])[np.array(chosen["oof_mse"]).argmin(0)]
+            np.testing.assert_array_equal(expected, chosen["lambda"])
+        for j, name in enumerate(("valence", "arousal", "dominance")):
+            baselines[name] = regression_metrics(truth[valid, j], np.full(valid.sum(), truth[train, j].mean()), 4.)
+        msp_rows = [row for row in csv.DictReader((ROOT / "data/MSP-Podcast/Labels/labels_consensus.csv").open()) if row["Split_Set"] in ("Train", "Development")]
+        native_train = [row for row in msp_rows if row["Split_Set"] == "Train"]
+        native_dev = [row for row in msp_rows if row["Split_Set"] == "Development"]
+        assert len(native_train) == 169190 and len(native_dev) == 34399
+        assert len({row["FileName"] for row in msp_rows}) == len(msp_rows)
+        assert not {row["SpkrID"] for row in native_train} & {row["SpkrID"] for row in native_dev}
+        msp_predictions = np.load(OUT / "msp_valence_predictions.npz", allow_pickle=False)
+        np.testing.assert_array_equal(msp_predictions["ids"], [row["FileName"] for row in native_dev])
+        np.testing.assert_allclose(msp_predictions["truth"], [float(row["EmoVal"]) for row in native_dev], atol=1e-12)
+        encoding = read("msp_dimension_encoding.json")
+        assert encoding["complete"] and encoding["encoded"] == 203589 and not encoding["test_encoding"]
+        msp_path = OUT / "msp_dimension_features.npy"
+        assert sha256(msp_path) == encoding["features_sha256"]
+        x = np.load(msp_path, mmap_mode="r", allow_pickle=False)
+        assert x.shape == (203589, 1536) and x.dtype == np.float16 and np.isfinite(x).all()
+        fit = np.load(OUT / "dimension_ridge_msp_text.npz", allow_pickle=False)
+        replayed = ((x[169190:].astype(np.float64) - fit["mean"]) / fit["scale"]) @ fit["weights"] + fit["target_mean"]
+        np.testing.assert_allclose(replayed.ravel() * 6 + 1, msp_predictions["prediction"], atol=1e-9)
+        assert phase3["msp"]["lambda"] == phase3["selected_lambdas"]["text"][0]
+    protection = read("deployment_protection.json")
+    assert all(sha256(ROOT / path) == fingerprint for path, fingerprint in protection["checkpoints"].items())
+    write_json(OUT / "result_audit.json", {"passed": True, "context_audit_sha256": sha256(OUT / "verified_context_cache.json"),
+               "phase_summary_sha256": {str(i): sha256(OUT / f"phase{i}_summary.json") for i in (1, 2, 3, 4)},
+               "calibration_fit_checks": calibration_checks, "checkpoint_replays": replay_checks,
+               "precision_control_sha256": sha256(OUT / "precision_control_summary.json"),
+               "encoder_input_audit_sha256": sha256(OUT / "encoder_input_audit.json"),
+               "legacy_cache_spotcheck_sha256": sha256(OUT / "legacy_prev_cache_audit.json"),
+               "tests_report_sha256": sha256(OUT / "tests_report.json"),
+               "iemocap_train_mean_baselines": baselines, "msp_native_speaker_disjoint": True,
+               "deployment_unchanged": protection["checkpoints"], "auditor_sha256": sha256(Path(__file__)),
+               "limitations": ["Phase 1 has retained prediction arrays but no saved original heads; the new 24 context and 8 precision-control heads were replayed.",
+                               "Artifact and source inspection establish the declared development protocol; they cannot prove arbitrary historical actions outside these runs."]})
+    print("Phases 1-4 artifact audit passed", flush=True)
+
+
+if __name__ == "__main__":
+    main()

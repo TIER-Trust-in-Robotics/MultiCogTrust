@@ -1,0 +1,40 @@
+--tag full_ref_s42 --train-text reference --eval 4:reference 4:asr --seed 42
+--tag loso1_ref_s42 --train 2 3 --train-text reference --eval 1:reference --seed 42
+--tag loso2_ref_s42 --train 1 3 --train-text reference --eval 2:reference --seed 42
+--tag loso3_ref_s42 --train 1 2 --train-text reference --eval 3:reference --seed 42
+--tag full_prev_s42 --train-text prevref --eval 4:prevref 4:prevasr --seed 42
+--tag loso1_prev_s42 --train 2 3 --train-text prevref --eval 1:prevref --seed 42
+--tag loso2_prev_s42 --train 1 3 --train-text prevref --eval 2:prevref --seed 42
+--tag loso3_prev_s42 --train 1 2 --train-text prevref --eval 3:prevref --seed 42
+--tag full_ref_s43 --train-text reference --eval 4:reference 4:asr --seed 43
+--tag loso1_ref_s43 --train 2 3 --train-text reference --eval 1:reference --seed 43
+--tag loso2_ref_s43 --train 1 3 --train-text reference --eval 2:reference --seed 43
+--tag loso3_ref_s43 --train 1 2 --train-text reference --eval 3:reference --seed 43
+--tag full_prev_s43 --train-text prevref --eval 4:prevref 4:prevasr --seed 43
+--tag loso1_prev_s43 --train 2 3 --train-text prevref --eval 1:prevref --seed 43
+--tag loso2_prev_s43 --train 1 3 --train-text prevref --eval 2:prevref --seed 43
+--tag loso3_prev_s43 --train 1 2 --train-text prevref --eval 3:prevref --seed 43
+--tag full_ref_s44 --train-text reference --eval 4:reference 4:asr --seed 44
+--tag loso1_ref_s44 --train 2 3 --train-text reference --eval 1:reference --seed 44
+--tag loso2_ref_s44 --train 1 3 --train-text reference --eval 2:reference --seed 44
+--tag loso3_ref_s44 --train 1 2 --train-text reference --eval 3:reference --seed 44
+--tag full_prev_s44 --train-text prevref --eval 4:prevref 4:prevasr --seed 44
+--tag loso1_prev_s44 --train 2 3 --train-text prevref --eval 1:prevref --seed 44
+--tag loso2_prev_s44 --train 1 3 --train-text prevref --eval 2:prevref --seed 44
+--tag loso3_prev_s44 --train 1 2 --train-text prevref --eval 3:prevref --seed 44
+--tag full_ref_s45 --train-text reference --eval 4:reference 4:asr --seed 45
+--tag loso1_ref_s45 --train 2 3 --train-text reference --eval 1:reference --seed 45
+--tag loso2_ref_s45 --train 1 3 --train-text reference --eval 2:reference --seed 45
+--tag loso3_ref_s45 --train 1 2 --train-text reference --eval 3:reference --seed 45
+--tag full_prev_s45 --train-text prevref --eval 4:prevref 4:prevasr --seed 45
+--tag loso1_prev_s45 --train 2 3 --train-text prevref --eval 1:prevref --seed 45
+--tag loso2_prev_s45 --train 1 3 --train-text prevref --eval 2:prevref --seed 45
+--tag loso3_prev_s45 --train 1 2 --train-text prevref --eval 3:prevref --seed 45
+--tag full_ref_s46 --train-text reference --eval 4:reference 4:asr --seed 46
+--tag loso1_ref_s46 --train 2 3 --train-text reference --eval 1:reference --seed 46
+--tag loso2_ref_s46 --train 1 3 --train-text reference --eval 2:reference --seed 46
+--tag loso3_ref_s46 --train 1 2 --train-text reference --eval 3:reference --seed 46
+--tag full_prev_s46 --train-text prevref --eval 4:prevref 4:prevasr --seed 46
+--tag loso1_prev_s46 --train 2 3 --train-text prevref --eval 1:prevref --seed 46
+--tag loso2_prev_s46 --train 1 3 --train-text prevref --eval 2:prevref --seed 46
+--tag loso3_prev_s46 --train 1 2 --train-text prevref --eval 3:prevref --seed 46
