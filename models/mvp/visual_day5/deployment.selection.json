@@ -1,0 +1,325 @@
+{
+  "config": {
+    "name": "asr_weight_selection_for_fixed_reference_selected_visual_head",
+    "head_selection": "preserve_reference_selected_mode_seed_epoch",
+    "validation_session": 4,
+    "test_evaluated": false,
+    "alphas": [
+      0.0,
+      0.1,
+      0.25,
+      0.5,
+      0.75,
+      1.0
+    ],
+    "selection_metric": "asr_macro_f1_including_empty_transcript_abstentions",
+    "tie_break": "lower_alpha",
+    "reason": "The reference-selected 0.25 mixture slightly reduced macro F1 with actual ASR. Choose only its deployment mixture weight on the development set; preserve the primary comparison."
+  },
+  "config_sha256": "0e4a15ca585e409314f096e3b8d51c978a3158c2f8476abe7f834cad6cbab318",
+  "reference_selected_checkpoint_sha256": "c1947465708857a10d28d88ee5722e44c6a79cd703a848d804f587146a7ca29e",
+  "asr_predictions_sha256": "2c5b72ae8f51524e361272bbfdb9668b786ecd00c502281b25c386a65c83cc2b",
+  "asr_config": {
+    "metadata_sha256": "551891a60edb65127d9d4b5d001ade1831ef4266e9296979f8d30b6702f45301",
+    "session": 4,
+    "preprocessing": {
+      "sample_rate": 16000,
+      "max_audio_sec": 6.0,
+      "min_samples": 1024,
+      "max_tokens": 297,
+      "waveform_normalization": "pcm_float"
+    },
+    "asr_model": "Systran/faster-whisper-tiny.en",
+    "asr_revision": "0d3d19a32d3338f10357c0889762bd8d64bbdeba",
+    "asr_weights_sha256": "1a5afae06a4db91c975c9a9d78be5cc110ee4ea022ad57d55492e4550e936b2a",
+    "beam_size": 1,
+    "language": "en",
+    "vad_filter": false,
+    "compute_type": "int8",
+    "audio_mode": "already_segmented_utterance"
+  },
+  "candidates": [
+    {
+      "alpha": 0.0,
+      "metrics": {
+        "count": 1031,
+        "abstentions": 4,
+        "accuracy": 0.7235693501454898,
+        "macro_f1": 0.7228613367216435,
+        "uar": 0.7201843042537337,
+        "confusion_with_abstention_column": [
+          [
+            253,
+            37,
+            7,
+            30,
+            0
+          ],
+          [
+            21,
+            244,
+            4,
+            32,
+            2
+          ],
+          [
+            0,
+            7,
+            108,
+            27,
+            1
+          ],
+          [
+            15,
+            81,
+            20,
+            141,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "alpha": 0.1,
+      "metrics": {
+        "count": 1031,
+        "abstentions": 4,
+        "accuracy": 0.7187196896217265,
+        "macro_f1": 0.7160604738183578,
+        "uar": 0.710519876272474,
+        "confusion_with_abstention_column": [
+          [
+            253,
+            39,
+            5,
+            30,
+            0
+          ],
+          [
+            20,
+            245,
+            4,
+            32,
+            2
+          ],
+          [
+            0,
+            9,
+            102,
+            31,
+            1
+          ],
+          [
+            15,
+            81,
+            20,
+            141,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "alpha": 0.25,
+      "metrics": {
+        "count": 1031,
+        "abstentions": 4,
+        "accuracy": 0.7264791464597479,
+        "macro_f1": 0.7214719047336792,
+        "uar": 0.714147408077533,
+        "confusion_with_abstention_column": [
+          [
+            253,
+            37,
+            4,
+            33,
+            0
+          ],
+          [
+            15,
+            252,
+            3,
+            31,
+            2
+          ],
+          [
+            0,
+            10,
+            98,
+            34,
+            1
+          ],
+          [
+            15,
+            76,
+            20,
+            146,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "alpha": 0.5,
+      "metrics": {
+        "count": 1031,
+        "abstentions": 4,
+        "accuracy": 0.6993210475266731,
+        "macro_f1": 0.6827026813498427,
+        "uar": 0.6692163067958665,
+        "confusion_with_abstention_column": [
+          [
+            248,
+            40,
+            4,
+            35,
+            0
+          ],
+          [
+            20,
+            242,
+            2,
+            37,
+            2
+          ],
+          [
+            4,
+            19,
+            72,
+            47,
+            1
+          ],
+          [
+            18,
+            65,
+            15,
+            159,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "alpha": 0.75,
+      "metrics": {
+        "count": 1031,
+        "abstentions": 4,
+        "accuracy": 0.518913676042677,
+        "macro_f1": 0.4555996185351644,
+        "uar": 0.4657319896946777,
+        "confusion_with_abstention_column": [
+          [
+            168,
+            87,
+            4,
+            68,
+            0
+          ],
+          [
+            28,
+            214,
+            5,
+            54,
+            2
+          ],
+          [
+            35,
+            37,
+            16,
+            54,
+            1
+          ],
+          [
+            47,
+            58,
+            15,
+            137,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "alpha": 1.0,
+      "metrics": {
+        "count": 1031,
+        "abstentions": 4,
+        "accuracy": 0.45295829291949563,
+        "macro_f1": 0.3827208386134515,
+        "uar": 0.40021859680511057,
+        "confusion_with_abstention_column": [
+          [
+            141,
+            113,
+            5,
+            68,
+            0
+          ],
+          [
+            34,
+            201,
+            7,
+            59,
+            2
+          ],
+          [
+            37,
+            42,
+            7,
+            56,
+            1
+          ],
+          [
+            61,
+            55,
+            23,
+            118,
+            1
+          ]
+        ]
+      }
+    }
+  ],
+  "selected": {
+    "alpha": 0.0,
+    "metrics": {
+      "count": 1031,
+      "abstentions": 4,
+      "accuracy": 0.7235693501454898,
+      "macro_f1": 0.7228613367216435,
+      "uar": 0.7201843042537337,
+      "confusion_with_abstention_column": [
+        [
+          253,
+          37,
+          7,
+          30,
+          0
+        ],
+        [
+          21,
+          244,
+          4,
+          32,
+          2
+        ],
+        [
+          0,
+          7,
+          108,
+          27,
+          1
+        ],
+        [
+          15,
+          81,
+          20,
+          141,
+          1
+        ]
+      ]
+    }
+  },
+  "interpretation": "This ASR validation set now participates in deployment weight selection. Its result is a development selection score, not independent evaluation. The head and reference comparison are unchanged; Session 5 is excluded.",
+  "checkpoint_sha256": "78f9239116db0d0b05c5426da0f965e0ee38b349f16178c5c9548cdf425d4605"
+}

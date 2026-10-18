@@ -1,0 +1,30 @@
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.py[cod]
+.DS_Store
+.env
+.json
+.env.*
+.ipynb_checkpoints/
+.virtual_documents/
+.vscode/
+CLAUDE.md
+AGENTS.md
+
+# Local datasets and generated feature stores. Keep these on disk, not in Git.
+data/IEMOCAP_full_release/
+data/iemocap_aligned_features/
+data/msp_aligned_features/
+data/MOSEI/
+data/mosei_aligned_features/
+data/processed/
+data/*.npz
+
+# Training checkpoints are large and reproducible from the source/configs.
+models/**/*.pt
+
+# Licensed dataset files and derived data (public repo)
+MSP-Podcast/
+docs/*.npz
+models/**/*.validation.jsonl

@@ -1,0 +1,28 @@
+{
+  "name": "week1_base_encoders_seed42",
+  "task": "iemocap_emotion_4",
+  "train_sessions": [
+    1,
+    2,
+    3
+  ],
+  "validation_session": 4,
+  "test_session": 5,
+  "test_evaluated": false,
+  "seed": 42,
+  "epochs": 20,
+  "batch_size": 16,
+  "learning_rate": 0.0001,
+  "selection_metric": "macro_f1",
+  "fusion_head": "min",
+  "freeze_text_encoder": true,
+  "freeze_audio_encoder": true,
+  "balanced_loss": false,
+  "max_audio_sec": 6.0,
+  "max_tokens": 297,
+  "transcript_source": "iemocap_reference",
+  "text_model_name": "bert-base-uncased",
+  "text_revision": "86b5e0934494bd15c9632b12f734a8a67f723594",
+  "audio_model_name": "facebook/hubert-base-ls960",
+  "audio_revision": "dba3bb02fda4248b6e082697eee756de8fe8aa8a"
+}

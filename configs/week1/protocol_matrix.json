@@ -1,0 +1,112 @@
+{
+  "created_utc": "2026-10-11T16:41:35.885757+00:00",
+  "test_model_inference_allowed": false,
+  "iemocap": {
+    "task": "four-class emotion",
+    "labels": {
+      "ang": 0,
+      "hap": 1,
+      "exc": 1,
+      "sad": 2,
+      "neu": 3
+    },
+    "label_names": [
+      "anger",
+      "happiness",
+      "sadness",
+      "neutral"
+    ],
+    "train_sessions": [
+      1,
+      2,
+      3
+    ],
+    "validation_session": 4,
+    "test_session_reserved": 5,
+    "selection": "reference validation macro F1 per seed; actual ASR diagnostic afterward",
+    "seeds": [
+      42,
+      43,
+      44
+    ],
+    "epochs": 20,
+    "batch_size": 16,
+    "learning_rate": 0.0001,
+    "models": [
+      "existing distilled CMT",
+      "existing pooled concatenation, text and audio controls",
+      "BERT/HuBERT-base CMT matched encoder-size comparison",
+      "distilled CMT label_smoothing=0.1 fixed experiment"
+    ],
+    "input": "frozen encoders, six-second waveform head crop, full reference transcript limited to 297 tokens; ASR uses actual tiny.en on same audio crop",
+    "equivalence_target": "Engineering tolerance of 2 macro-F1/UAR points versus matched larger reference; not statistical equivalence",
+    "tuning": "One config per seed, same 20-epoch budget; improvement preregistered"
+  },
+  "mosei_original_features": {
+    "task": "continuous sentiment [-3,3] regression",
+    "feature_release_sha256": "ad8b23d50557045e7d47959ce6c5b955d8d983f2979c7d9b7b9226f6dd6fec1f",
+    "feature_index_sha256": "0c88af58c8cf8e4379f1497bb725004df33e4b063efe60d509859ad8ccf77c47",
+    "split_counts": {
+      "train": 16326,
+      "valid": 1871,
+      "test_not_inferred": 4659
+    },
+    "models": [
+      "MMSA LMF",
+      "MMSA MulT after LMF passes"
+    ],
+    "seeds": [
+      42,
+      43,
+      44
+    ],
+    "budget": "Released config, one run per seed, eight stale epochs; no arbitrary epoch cap or validation hyperparameter search",
+    "selection": "Released shuffled validation mean-batch L1 loss rounded to four decimals; primary reported quality metric is ordered full-set MAE",
+    "metrics": [
+      "MAE",
+      "Pearson r",
+      "Acc7",
+      "Acc2/F1 nonzero truth",
+      "Acc2/F1 including zero"
+    ],
+    "released_config_seq_lens": [
+      50,
+      500,
+      375
+    ],
+    "actual_feature_seq_lens": [
+      50,
+      500,
+      500
+    ],
+    "sequence_handling": "Preserve full released arrays; upstream loader updates seq_lens from actual data. LMF averages padded audio/vision time; MulT consumes sequences.",
+    "known_source_overlap": "Original split retained for reference comparability. Duplicate recordings and shared intro remain a caveat; no independent generalization claim."
+  },
+  "mosei_modified_raw": {
+    "protocol": "mosei_sdk_intersection_source_deduplicated_v3",
+    "manifest": "data/processed/benchmarks/week1_v1/source_resolution/development.jsonl",
+    "manifest_sha256": "abb48a01d95e32da3e2285c5f99858a1e89819a7ca8dbdc5b2d7b13bbaa873e5",
+    "counts": {
+      "train": 16317,
+      "valid": 1867
+    },
+    "selection": "Labels unused for exclusions; whole flagged source videos quarantined, validation group removed conservatively",
+    "reference_models": "Prior expected-score audio/text baseline and TF-IDF/Ridge rescored on the new shared validation subset; no new training in this first IEMOCAP improvement experiment",
+    "interpretation": "Modified data and raw encoders; results separate from original-feature references and published test tables"
+  },
+  "exposure_record": {
+    "this_week": "No IEMOCAP Session 5 encoding/inference; no MOSEI test model predictions. Test metadata/media read only for split/source auditing; original feature pickle test arrays materialized during deserialization then discarded.",
+    "historical_iemocap": "Older 11-class project trainer used Session 5 test F1 for epoch selection; current four-class development protocol reserves S5. Do not call it project-unseen.",
+    "historical_mosei": "Existing seven-class checkpoint already evaluated original test; prior archived test scores are historical, not new independent testing.",
+    "validation": "Existing four-class Session 4 and MOSEI validation scores already inspected; reference/improvement runs are development evidence. Cleaning does not erase exposure."
+  },
+  "provenance": {
+    "scope_amendment_sha256": "8b8349c2f926433228076d6161390af7778100539c4e7c53a2edf169df0946f4",
+    "improvement_preregistration_sha256": "1b6f0e73aa913e7b5ce2b62c771e1f6a676b029a9c443878d0c3f3a67a323b35",
+    "mmsa_vendor_provenance_sha256": "483f1eaec546b5cb96113ba49329d7545e40abb17d39d4261a377c2b8201d6e0",
+    "source_resolution_report_sha256": "709270c6d403621ec1a697d2969b8cd7ba33c3c4ddac91d95aeb0aa1b351217e",
+    "trainer_default_extension": "Added optional smoothing default=0 plus trainer source provenance after larger seed42 loaded. Existing baseline/reference config behavior unchanged.",
+    "initial_trainer_sha256": "d0d055ae8d747dff1ee8fc0df70e6875525494a3878a8ba0cf8eb199f60248a6",
+    "current_trainer_sha256": "34a29be5f25e1825bb408138082aad602944becaf3d17eab4789086b9d10be13"
+  }
+}

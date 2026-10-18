@@ -1,0 +1,65 @@
+{
+  "featurePath": "MOSEI/Processed/unaligned_50.pkl",
+  "seq_lens": [
+    50,
+    500,
+    375
+  ],
+  "feature_dims": [
+    768,
+    74,
+    35
+  ],
+  "train_samples": 16326,
+  "num_classes": 3,
+  "language": "en",
+  "KeyEval": "Loss",
+  "missing_rate": [
+    0.2,
+    0.2,
+    0.2
+  ],
+  "missing_seed": [
+    1111,
+    1111,
+    1111
+  ],
+  "need_data_aligned": false,
+  "need_model_aligned": false,
+  "need_normalized": true,
+  "early_stop": 8,
+  "hidden_dims": [
+    128,
+    16,
+    128
+  ],
+  "dropouts": [
+    0.2,
+    0.2,
+    0.2,
+    0.2
+  ],
+  "rank": 4,
+  "batch_size": 32,
+  "learning_rate": 0.001,
+  "factor_lr": 0.001,
+  "weight_decay": 0.001,
+  "model_name": "lmf",
+  "dataset_name": "mosei",
+  "train_mode": "regression",
+  "seed": 43,
+  "selection_metric": "upstream_validation_Loss",
+  "test_predictions_allowed": false,
+  "upstream_config_sha256": "0676e57f973a8454c9e5fe293dffa22ae10bd6d8319bac9a9a0fe1495871110c",
+  "mmsa_commit": "a94e65d07fa1ae0d44e552390074b29b0898edfd",
+  "tuning_trials": 1,
+  "release_sha256": "ad8b23d50557045e7d47959ce6c5b955d8d983f2979c7d9b7b9226f6dd6fec1f",
+  "preserved_trainer_semantics": "LMF factor parameters[:3], subnets[5:]; fusion weights/bias omitted; padded-time audio/vision mean",
+  "implementation_differences": [
+    "MPS instead of CUDA",
+    "No test loader or inference",
+    "Ordered post-reload validation predictions and full native metrics",
+    "Resume state at epoch boundaries",
+    "Selection retains shuffled validation mean-batch MAE rounded to four decimals as upstream"
+  ]
+}

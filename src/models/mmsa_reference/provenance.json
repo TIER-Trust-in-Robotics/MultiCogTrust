@@ -1,0 +1,56 @@
+{
+  "upstream_repository": "https://github.com/thuiar/MMSA",
+  "commit": "a94e65d07fa1ae0d44e552390074b29b0898edfd",
+  "files": [
+    {
+      "upstream_path": "src/MMSA/models/singleTask/LMF.py",
+      "upstream_sha256": "576732cffe65ce1ae0421054d4123f7e3cd401a5a2555e305cbb0e0df80d73c9",
+      "local_path": "src/models/mmsa_reference/lmf.py",
+      "local_sha256": "79681e8a3e307cb5605e177aaf59095fb9ecd135e18eec64d19409e65691a69c",
+      "changes": [
+        "relative import only"
+      ]
+    },
+    {
+      "upstream_path": "src/MMSA/models/singleTask/MULT.py",
+      "upstream_sha256": "1f4556f5c03f186fc7e2a8dab5d4b56b31f724504306f6dc945330411c0511b1",
+      "local_path": "src/models/mmsa_reference/mult.py",
+      "local_sha256": "86734668c9a8a3a8db2aa16dd2bf128825884595bcd6a8ecca23f27d112a6e3a",
+      "changes": [
+        "relative import",
+        "unused online BERT path disabled; released use_bert=false retained"
+      ]
+    },
+    {
+      "upstream_path": "src/MMSA/models/subNets/FeatureNets.py",
+      "upstream_sha256": "3c26b408c6eafde90ce35429597d4331b9a64978338b68cfb1e4806c9724b067",
+      "local_path": "src/models/mmsa_reference/feature_nets.py",
+      "local_sha256": "3c26b408c6eafde90ce35429597d4331b9a64978338b68cfb1e4806c9724b067",
+      "changes": []
+    },
+    {
+      "upstream_path": "src/MMSA/models/subNets/transformers_encoder/transformer.py",
+      "upstream_sha256": "45faee93315c02ed0752b6b4fa70e028d5491bd7c2435240fc4a6de017d7d2d5",
+      "local_path": "src/models/mmsa_reference/transformer.py",
+      "local_sha256": "9c262549cc5aa425996a9c49e43ed2b9cec836039e4fe34a9ac6bfccc5639de4",
+      "changes": [
+        "move future mask to tensor device for MPS as well as CUDA; unchanged values"
+      ]
+    },
+    {
+      "upstream_path": "src/MMSA/models/subNets/transformers_encoder/multihead_attention.py",
+      "upstream_sha256": "7ef2c09281da339bd892a31ca9c590142ba12664fb25fb394c09de152002abb9",
+      "local_path": "src/models/mmsa_reference/multihead_attention.py",
+      "local_sha256": "7ef2c09281da339bd892a31ca9c590142ba12664fb25fb394c09de152002abb9",
+      "changes": []
+    },
+    {
+      "upstream_path": "src/MMSA/models/subNets/transformers_encoder/position_embedding.py",
+      "upstream_sha256": "cf6cf441782c7b6e61a815955dee775ae041c3a2b6b4eff8c536ec77972fb7b2",
+      "local_path": "src/models/mmsa_reference/position_embedding.py",
+      "local_sha256": "cf6cf441782c7b6e61a815955dee775ae041c3a2b6b4eff8c536ec77972fb7b2",
+      "changes": []
+    }
+  ],
+  "training_harness": "Separate validation-only harness; no upstream test loader"
+}

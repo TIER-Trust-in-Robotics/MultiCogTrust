@@ -1,0 +1,119 @@
+Loading weights:   0%|          | 0/100 [00:00<?, ?it/s]Loading weights: 100%|██████████| 100/100 [00:00<00:00, 36151.56it/s]
+[1mDistilBertModel LOAD REPORT[0m from: distilbert-base-uncased
+Key                     | Status     |  | 
+------------------------+------------+--+-
+vocab_layer_norm.weight | UNEXPECTED |  | 
+vocab_transform.bias    | UNEXPECTED |  | 
+vocab_projector.bias    | UNEXPECTED |  | 
+vocab_transform.weight  | UNEXPECTED |  | 
+vocab_layer_norm.bias   | UNEXPECTED |  | 
+
+[3mNotes:
+- UNEXPECTED[3m	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.[0m
+Loading weights:   0%|          | 0/49 [00:00<?, ?it/s]Loading weights: 100%|██████████| 49/49 [00:00<00:00, 2040.90it/s]
+Device mps; training 3259; validation 1031; Session 5 excluded
+Cached 100/4290 (3.5 utterances/s)
+Cached 200/4290 (4.3 utterances/s)
+Cached 300/4290 (4.6 utterances/s)
+Cached 400/4290 (4.8 utterances/s)
+Cached 500/4290 (4.6 utterances/s)
+Cached 600/4290 (4.6 utterances/s)
+Cached 700/4290 (4.5 utterances/s)
+Cached 800/4290 (4.2 utterances/s)
+Cached 900/4290 (4.1 utterances/s)
+Cached 1000/4290 (4.2 utterances/s)
+Cached 1100/4290 (4.1 utterances/s)
+Cached 1200/4290 (4.1 utterances/s)
+Cached 1300/4290 (4.1 utterances/s)
+Cached 1400/4290 (4.2 utterances/s)
+Cached 1500/4290 (4.3 utterances/s)
+Cached 1600/4290 (4.4 utterances/s)
+Cached 1700/4290 (4.3 utterances/s)
+Cached 1800/4290 (4.2 utterances/s)
+Cached 1900/4290 (4.1 utterances/s)
+Cached 2000/4290 (4.0 utterances/s)
+Cached 2100/4290 (3.8 utterances/s)
+Cached 2200/4290 (3.6 utterances/s)
+Cached 2300/4290 (3.3 utterances/s)
+Cached 2400/4290 (3.2 utterances/s)
+Cached 2500/4290 (3.1 utterances/s)
+Cached 2600/4290 (3.0 utterances/s)
+Cached 2700/4290 (2.9 utterances/s)
+Cached 2800/4290 (2.8 utterances/s)
+Cached 2900/4290 (2.8 utterances/s)
+Cached 3000/4290 (2.8 utterances/s)
+Cached 3100/4290 (2.8 utterances/s)
+Cached 3200/4290 (2.7 utterances/s)
+Cached 3300/4290 (2.7 utterances/s)
+Cached 3400/4290 (2.7 utterances/s)
+Cached 3500/4290 (2.8 utterances/s)
+Cached 3600/4290 (2.8 utterances/s)
+Cached 3700/4290 (2.8 utterances/s)
+Cached 3800/4290 (2.8 utterances/s)
+Cached 3900/4290 (2.8 utterances/s)
+Cached 4000/4290 (2.8 utterances/s)
+Cached 4100/4290 (2.8 utterances/s)
+Cached 4200/4290 (2.5 utterances/s)
+Cached 4290/4290 (2.5 utterances/s)
+Epoch 01: loss=0.9106, val F1=0.5727, UAR=0.5728, WA=0.6372 (115.0s)
+Epoch 02: loss=0.6563, val F1=0.7103, UAR=0.6983, WA=0.7158 (34.3s)
+Epoch 03: loss=0.5449, val F1=0.7084, UAR=0.7040, WA=0.7119 (27.5s)
+Epoch 04: loss=0.4192, val F1=0.7200, UAR=0.7262, WA=0.7187 (36.7s)
+Epoch 05: loss=0.3467, val F1=0.7403, UAR=0.7532, WA=0.7439 (28.0s)
+Epoch 06: loss=0.2766, val F1=0.7469, UAR=0.7444, WA=0.7488 (28.3s)
+Epoch 07: loss=0.1861, val F1=0.7258, UAR=0.7224, WA=0.7304 (24.8s)
+Epoch 08: loss=0.1367, val F1=0.6856, UAR=0.6752, WA=0.6916 (27.6s)
+Epoch 09: loss=0.0962, val F1=0.7159, UAR=0.7233, WA=0.7168 (21.6s)
+Epoch 10: loss=0.0612, val F1=0.7466, UAR=0.7529, WA=0.7430 (19.8s)
+Epoch 11: loss=0.0714, val F1=0.7262, UAR=0.7325, WA=0.7304 (20.4s)
+Epoch 12: loss=0.0328, val F1=0.6874, UAR=0.6925, WA=0.6935 (24.6s)
+Epoch 13: loss=0.0311, val F1=0.7210, UAR=0.7175, WA=0.7236 (19.3s)
+Epoch 14: loss=0.0325, val F1=0.6704, UAR=0.6700, WA=0.6799 (21.7s)
+Epoch 15: loss=0.0750, val F1=0.7049, UAR=0.7037, WA=0.7129 (23.5s)
+Epoch 16: loss=0.0458, val F1=0.7190, UAR=0.7225, WA=0.7187 (29.8s)
+Epoch 17: loss=0.0320, val F1=0.6999, UAR=0.7133, WA=0.7042 (20.4s)
+Epoch 18: loss=0.0272, val F1=0.6990, UAR=0.7024, WA=0.7071 (19.5s)
+Epoch 19: loss=0.0168, val F1=0.7153, UAR=0.7149, WA=0.7177 (21.4s)
+Epoch 20: loss=0.0030, val F1=0.7151, UAR=0.7136, WA=0.7158 (18.3s)
+{
+  "best_epoch": 6,
+  "validation": {
+    "count": 1031,
+    "accuracy": 0.7487875848690592,
+    "macro_f1": 0.7468976799769483,
+    "uar": 0.7443549257192217,
+    "per_class_recall": {
+      "anger": 0.7920489296636085,
+      "happiness": 0.8184818481848185,
+      "sadness": 0.7622377622377622,
+      "neutral": 0.6046511627906976
+    },
+    "confusion": [
+      [
+        259,
+        34,
+        5,
+        29
+      ],
+      [
+        24,
+        248,
+        5,
+        26
+      ],
+      [
+        0,
+        11,
+        109,
+        23
+      ],
+      [
+        14,
+        70,
+        18,
+        156
+      ]
+    ]
+  },
+  "test_evaluated": false
+}

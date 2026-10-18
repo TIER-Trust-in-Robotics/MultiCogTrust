@@ -1,3 +1,10 @@
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 import torch
 import numpy as np
 from collections import deque
@@ -35,6 +42,7 @@ class SileroVAD:
         chunk_ms: float = 32.0,
         min_speech_ms: int = 300,  # duration of detected speach before switching from IDLE to SPEAKING
         min_silence_ms: int = 300,  # duration of detected silence before switching from SPEAKING to IDLE
+        max_segment_sec: float | None = None,
     ):
         self.model = load_silero_vad()
         """
@@ -46,6 +54,8 @@ class SileroVAD:
         self._threshold = threshold
         self._sample_rate = sample_rate
         self._chunk_ms = chunk_ms
+        self.max_segment_sec = max_segment_sec
+        self._last_speech_end = None
 
         self._speaking = False  # used for connecting speech chunks together in an utterance. i.e. a sentence.
         self._speech_count = 0
@@ -60,7 +70,7 @@ class SileroVAD:
         self._speech_chunks: list[AudioChunk] = []
         self._pre_buffer: deque = deque(maxlen=pre_buffer_size)
 
-    def _finish_segment(self) -> SpeechSegment:
+    def _finish_segment(self, reason="silence") -> SpeechSegment:
         utterance = np.concatenate([chunk.samples for chunk in self._speech_chunks])
 
         return SpeechSegment(
@@ -68,8 +78,11 @@ class SileroVAD:
             start_time=self._speech_chunks[0].timestamp,
             end_time=self._speech_chunks[-1].end_time,
             sample_rate=self._sample_rate,
+            speech_end_time=self._last_speech_end,
+            end_reason=reason,
         )
 
+    @torch.no_grad()
     def _speach_prob(self, samples: np.ndarray) -> float:
         """
         The torch JIT model accepts a 1D tensor of float32 samples
@@ -92,6 +105,8 @@ class SileroVAD:
 
         prob = self._speach_prob(chunk.samples)
         is_speech = prob > self._threshold
+        if is_speech:
+            self._last_speech_end = chunk.end_time
 
         if self._speaking:  # SPEAKING
             self._speech_chunks.append(chunk)
@@ -105,6 +120,14 @@ class SileroVAD:
                     return prob, segment
             else:
                 self._silence_count = 0
+            if (
+                self.max_segment_sec is not None
+                and sum(len(c.samples) for c in self._speech_chunks) / self._sample_rate
+                >= self.max_segment_sec
+            ):
+                segment = self._finish_segment("max_duration")
+                self._reset_segment()
+                return prob, segment
         else:  # IDLE
             if is_speech:
                 self._speech_count += 1
@@ -126,6 +149,21 @@ class SileroVAD:
         self._speaking = False
         self._silence_count = 0
         self._speech_count = 0
+        self._last_speech_end = None
+
+    def flush(self):
+        """Emit the final accepted speech segment when the source stops."""
+        segment = (
+            self._finish_segment("end_of_stream")
+            if self._speaking and self._speech_chunks
+            else None
+        )
+        self._reset_segment()
+        return segment
+
+    def reset(self):
+        """Discard interrupted speech and reset recurrent VAD state after a gap."""
+        self._reset_all()
 
     def _reset_all(self):
         self.model.reset_states()

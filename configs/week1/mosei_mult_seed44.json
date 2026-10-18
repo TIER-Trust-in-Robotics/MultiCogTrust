@@ -1,0 +1,75 @@
+{
+  "featurePath": "MOSEI/Processed/unaligned_50.pkl",
+  "seq_lens": [
+    50,
+    500,
+    375
+  ],
+  "feature_dims": [
+    768,
+    74,
+    35
+  ],
+  "train_samples": 16326,
+  "num_classes": 3,
+  "language": "en",
+  "KeyEval": "Loss",
+  "missing_rate": [
+    0.2,
+    0.2,
+    0.2
+  ],
+  "missing_seed": [
+    1111,
+    1111,
+    1111
+  ],
+  "need_data_aligned": false,
+  "need_model_aligned": false,
+  "early_stop": 8,
+  "use_bert": false,
+  "use_bert_finetune": false,
+  "attn_mask": true,
+  "update_epochs": 8,
+  "attn_dropout_a": 0.0,
+  "attn_dropout_v": 0.0,
+  "relu_dropout": 0.0,
+  "embed_dropout": 0.0,
+  "res_dropout": 0.0,
+  "dst_feature_dim_nheads": [
+    30,
+    6
+  ],
+  "batch_size": 4,
+  "learning_rate": 0.0005,
+  "nlevels": 4,
+  "conv1d_kernel_size_l": 5,
+  "conv1d_kernel_size_a": 1,
+  "conv1d_kernel_size_v": 3,
+  "text_dropout": 0.3,
+  "attn_dropout": 0.4,
+  "output_dropout": 0.5,
+  "grad_clip": 0.6,
+  "patience": 20,
+  "weight_decay": 0.001,
+  "transformers": "bert",
+  "pretrained": "bert-base-uncased",
+  "model_name": "mult",
+  "dataset_name": "mosei",
+  "train_mode": "regression",
+  "seed": 44,
+  "selection_metric": "upstream_validation_Loss",
+  "test_predictions_allowed": false,
+  "upstream_config_sha256": "0676e57f973a8454c9e5fe293dffa22ae10bd6d8319bac9a9a0fe1495871110c",
+  "mmsa_commit": "a94e65d07fa1ae0d44e552390074b29b0898edfd",
+  "tuning_trials": 1,
+  "release_sha256": "ad8b23d50557045e7d47959ce6c5b955d8d983f2979c7d9b7b9226f6dd6fec1f",
+  "preserved_trainer_semantics": "MulT ignores configured weight decay; gradient sum over eight batches; clip value after each backward; incomplete group discarded",
+  "implementation_differences": [
+    "MPS instead of CUDA",
+    "No test loader or inference",
+    "Ordered post-reload validation predictions and full native metrics",
+    "Resume state at epoch boundaries",
+    "Selection retains shuffled validation mean-batch MAE rounded to four decimals as upstream"
+  ]
+}

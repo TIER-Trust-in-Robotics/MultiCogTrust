@@ -1,0 +1,10 @@
+{
+  "name": "asr_weight_selection_for_fixed_reference_selected_visual_head",
+  "head_selection": "preserve_reference_selected_mode_seed_epoch",
+  "validation_session": 4,
+  "test_evaluated": false,
+  "alphas": [0.0, 0.1, 0.25, 0.5, 0.75, 1.0],
+  "selection_metric": "asr_macro_f1_including_empty_transcript_abstentions",
+  "tie_break": "lower_alpha",
+  "reason": "The reference-selected 0.25 mixture slightly reduced macro F1 with actual ASR. Choose only its deployment mixture weight on the development set; preserve the primary comparison."
+}

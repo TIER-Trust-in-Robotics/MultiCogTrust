@@ -1,0 +1,44 @@
+{
+  "name": "quality_development_v1",
+  "test_model_inference": false,
+  "seeds": [42, 43, 44],
+  "iemocap": {
+    "task": "iemocap_emotion_4",
+    "train_sessions": [1, 2, 3],
+    "validation_session": 4,
+    "reserved_session": 5,
+    "modes": ["text", "audio", "concatenation"],
+    "epochs": 20,
+    "batch_size": 16,
+    "learning_rate": 0.0001,
+    "hidden_dim": 128,
+    "dropout": 0.05,
+    "selection_metric": "macro_f1",
+    "pooling": "mean_of_unpadded_cached_sequence_including_text_special_tokens",
+    "normalization": "training_only_feature_standardization",
+    "cache_index": "data/processed/iemocap_encoder_cache/index.json",
+    "reference_checkpoint": "models/mvp/audio_text_baseline.pt"
+  },
+  "mosei": {
+    "task": "mosei_sentiment_regression",
+    "split_source": "mosei_sdk_intersection_source_deduplicated_v2",
+    "label_csv_sha256": "52d885bd1e8b29a4c06a69e2b1dd67dd02f7bcbdfa38ad918144fd5673a83521",
+    "selection_metric": "validation_mae",
+    "tfidf_max_features": 30000,
+    "tfidf_ngram_range": [1, 2],
+    "tfidf_min_df": 2,
+    "ridge_alphas": [0.1, 1.0, 10.0, 100.0],
+    "legacy_replay": {
+      "checkpoint": "models/mosei/mosei_cross_modal.pt",
+      "split": "valid",
+      "max_audio_sec": 8.0,
+      "max_tokens": 297,
+      "cache_quantization": "float16_then_float32",
+      "text_model_name": "distilbert-base-uncased",
+      "text_revision": "12040accade4e8a0f71eabdb258fecc2e7e948be",
+      "audio_model_name": "ntu-spml/distilhubert",
+      "audio_revision": "fa87d96265d6b7af66e112faff6ff44df419cec9"
+    }
+  },
+  "interpretation": "Development controls; published-model reproduction and final test remain separate gates. Three seeds describe training variation, not population uncertainty."
+}

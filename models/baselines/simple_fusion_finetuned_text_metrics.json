@@ -1,0 +1,333 @@
+{
+  "model": "simple_fusion_finetuned_text",
+  "dataset": "iemocap_aligned_features",
+  "train_size": 7867,
+  "test_size": 2170,
+  "num_labels": 11,
+  "label_names": [
+    "anger",
+    "happiness",
+    "excitement",
+    "neutral",
+    "sadness",
+    "frustration",
+    "fear",
+    "surprise",
+    "disgust",
+    "undefined",
+    "other"
+  ],
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 1.1458619328754835,
+      "train_accuracy": 0.577348417439939,
+      "test_loss": 1.7629307919520936,
+      "test_accuracy": 0.3935483870967742,
+      "test_macro_f1": 0.2829292557008435
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.8833867976319097,
+      "train_accuracy": 0.6527265793822296,
+      "test_loss": 1.963145447010818,
+      "test_accuracy": 0.3935483870967742,
+      "test_macro_f1": 0.28043954871489346
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.7364243675864787,
+      "train_accuracy": 0.6920045760772848,
+      "test_loss": 1.8889869047818095,
+      "test_accuracy": 0.4336405529953917,
+      "test_macro_f1": 0.3189935866584245
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.6477066919129914,
+      "train_accuracy": 0.7232744375238337,
+      "test_loss": 2.0186346175861525,
+      "test_accuracy": 0.3986175115207373,
+      "test_macro_f1": 0.29349906348105204
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.5882110219944595,
+      "train_accuracy": 0.7497139951696962,
+      "test_loss": 2.090511994420933,
+      "test_accuracy": 0.38894009216589864,
+      "test_macro_f1": 0.28585029017488506
+    }
+  ],
+  "best_epoch": 3,
+  "test_loss": 1.8889869047818095,
+  "test_accuracy": 0.4336405529953917,
+  "test_macro_f1": 0.3189935866584245,
+  "classification_report": {
+    "anger": {
+      "precision": 0.4536082474226804,
+      "recall": 0.5176470588235295,
+      "f1": 0.4835164835164835,
+      "support": 170
+    },
+    "happiness": {
+      "precision": 0.22772277227722773,
+      "recall": 0.4825174825174825,
+      "f1": 0.3094170403587444,
+      "support": 143
+    },
+    "excitement": {
+      "precision": 0.5627705627705628,
+      "recall": 0.43478260869565216,
+      "f1": 0.4905660377358491,
+      "support": 299
+    },
+    "neutral": {
+      "precision": 0.4594594594594595,
+      "recall": 0.4869791666666667,
+      "f1": 0.4728192161820481,
+      "support": 384
+    },
+    "sadness": {
+      "precision": 0.49050632911392406,
+      "recall": 0.6326530612244898,
+      "f1": 0.5525846702317292,
+      "support": 245
+    },
+    "frustration": {
+      "precision": 0.5256064690026954,
+      "recall": 0.5118110236220472,
+      "f1": 0.5186170212765957,
+      "support": 381
+    },
+    "fear": {
+      "precision": 0.11764705882352941,
+      "recall": 0.2,
+      "f1": 0.14814814814814817,
+      "support": 10
+    },
+    "surprise": {
+      "precision": 0.171875,
+      "recall": 0.6111111111111112,
+      "f1": 0.2682926829268293,
+      "support": 18
+    },
+    "disgust": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 0
+    },
+    "undefined": {
+      "precision": 0.39245283018867927,
+      "recall": 0.2,
+      "f1": 0.26496815286624203,
+      "support": 520
+    },
+    "other": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 0
+    }
+  },
+  "confusion_matrix": [
+    [
+      88,
+      5,
+      4,
+      9,
+      8,
+      26,
+      0,
+      3,
+      0,
+      27,
+      0
+    ],
+    [
+      0,
+      69,
+      33,
+      13,
+      8,
+      6,
+      1,
+      0,
+      0,
+      13,
+      0
+    ],
+    [
+      6,
+      61,
+      130,
+      32,
+      10,
+      12,
+      5,
+      9,
+      0,
+      34,
+      0
+    ],
+    [
+      11,
+      44,
+      13,
+      187,
+      34,
+      42,
+      4,
+      8,
+      0,
+      41,
+      0
+    ],
+    [
+      2,
+      11,
+      9,
+      26,
+      155,
+      24,
+      0,
+      2,
+      0,
+      16,
+      0
+    ],
+    [
+      41,
+      17,
+      8,
+      58,
+      25,
+      195,
+      0,
+      6,
+      0,
+      29,
+      2
+    ],
+    [
+      0,
+      1,
+      2,
+      1,
+      3,
+      0,
+      2,
+      1,
+      0,
+      0,
+      0
+    ],
+    [
+      1,
+      1,
+      2,
+      0,
+      1,
+      1,
+      0,
+      11,
+      0,
+      1,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      45,
+      94,
+      30,
+      81,
+      72,
+      65,
+      5,
+      24,
+      0,
+      104,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  ],
+  "config": {
+    "aligned_dir": "/Users/magi/Code/MultiCogTrust/data/iemocap_aligned_features",
+    "model_name": "distilbert-base-uncased",
+    "text_checkpoint": "/Users/magi/Code/MultiCogTrust/models/baselines/text_finetuned_distilbert.pt",
+    "max_length": 128,
+    "epochs": 5,
+    "batch_size": 8,
+    "text_lr": 2e-05,
+    "non_text_lr": 0.0005,
+    "weight_decay": 0.01,
+    "dropout": 0.2,
+    "audio_hidden_dim": 128,
+    "fusion_hidden_dim": 256,
+    "no_class_weights": false,
+    "device": "mps",
+    "limit_train": null,
+    "limit_test": null,
+    "output": "/Users/magi/Code/MultiCogTrust/models/baselines/simple_fusion_finetuned_text.pt",
+    "metrics_output": "/Users/magi/Code/MultiCogTrust/models/baselines/simple_fusion_finetuned_text_metrics.json",
+    "freeze_text_encoder": false,
+    "text_checkpoint_load": {
+      "checkpoint": "/Users/magi/Code/MultiCogTrust/models/baselines/text_finetuned_distilbert.pt",
+      "loaded_keys": 100,
+      "missing_keys": [],
+      "unexpected_keys": []
+    },
+    "class_weights": [
+      0.013311896473169327,
+      0.027477873489260674,
+      0.016761131584644318,
+      0.009380663745105267,
+      0.014803336001932621,
+      0.00846049003303051,
+      0.4139999747276306,
+      0.13955055177211761,
+      6.2099995613098145,
+      0.006253776140511036,
+      4.139999866485596
+    ]
+  },
+  "required_metric_keys_present": [
+    "best_epoch",
+    "classification_report",
+    "confusion_matrix",
+    "dataset",
+    "history",
+    "label_names",
+    "model",
+    "num_labels",
+    "test_accuracy",
+    "test_macro_f1",
+    "test_size",
+    "train_size"
+  ]
+}
