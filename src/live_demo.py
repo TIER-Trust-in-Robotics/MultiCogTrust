@@ -42,7 +42,7 @@ if str(ROOT) not in sys.path:
 
 import soundfile as sf
 
-from src.emotion_checkpoint import EMOTION_LABELS, prepare_audio
+from src.emotion_checkpoint import EMOTION_LABELS, prepare_audio, tokenize_text
 from src.emotion_context import PRESETS, SpeakerContext
 from src.inference_pipeline import FAST_ASR, SpeechProcessor
 
@@ -169,7 +169,7 @@ class SharedEncoders:
             for name, predictor, text in (("A", a, text_a), ("B", self.b, text_b)):
                 started = time.perf_counter()
                 if text not in texts:
-                    tokens = a.tokenizer(text, return_tensors="pt", truncation=True, max_length=a.preprocessing.max_tokens)
+                    tokens = tokenize_text(a.tokenizer, text, a.preprocessing)
                     mask = tokens["attention_mask"].to(a.device)
                     texts[text] = (a.model.encode_text(tokens["input_ids"].to(a.device), mask), mask)
                 embeddings, mask = texts[text]

@@ -13,6 +13,7 @@ from src.emotion_checkpoint import (
     load_checkpoint_weights,
     prepare_audio,
     read_checkpoint,
+    tokenize_text,
 )
 from src.models import CrossModalTransformerFusionClassifier
 
@@ -62,12 +63,7 @@ class CrossModalEmotionPredictor:
             .unsqueeze(0)
             .to(self.device)
         )
-        encoded = self.tokenizer(
-            text,
-            return_tensors="pt",
-            truncation=True,
-            max_length=self.preprocessing.max_tokens,
-        )
+        encoded = tokenize_text(self.tokenizer, text, self.preprocessing)
         output = self.model(
             encoded["input_ids"].to(self.device),
             encoded["attention_mask"].to(self.device),

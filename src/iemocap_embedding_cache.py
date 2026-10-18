@@ -13,7 +13,7 @@ import soundfile as sf
 import torch
 from torch.utils.data import Dataset
 
-from src.emotion_checkpoint import prepare_audio
+from src.emotion_checkpoint import prepare_audio, tokenize_text
 
 
 def sha256(path):
@@ -131,12 +131,7 @@ def build_cache(
                 waveform = prepare_audio(values, sample_rate, preprocessing)[None].to(
                     device
                 )
-                tokens = tokenizer(
-                    sample.text,
-                    return_tensors="pt",
-                    truncation=True,
-                    max_length=preprocessing.max_tokens,
-                )
+                tokens = tokenize_text(tokenizer, sample.text, preprocessing)
                 text = (
                     model.encode_text(
                         tokens["input_ids"].to(device),

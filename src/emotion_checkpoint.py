@@ -12,6 +12,7 @@ import torch.nn.functional as F
 EMOTION_LABELS = ["anger", "happiness", "sadness", "neutral"]
 EMOTION_LABEL_MAP = {"ang": 0, "hap": 1, "exc": 1, "sad": 2, "neu": 3}
 SCHEMA_VERSION = 1
+CONTEXT_SEPARATOR = " [SEP] "
 
 
 @dataclass(frozen=True)
@@ -54,6 +55,27 @@ def prepare_audio(audio, sample_rate: int, config: PreprocessingConfig) -> torch
     if waveform.numel() < config.min_samples:
         waveform = F.pad(waveform, (0, config.min_samples - waveform.numel()))
     return waveform
+
+
+def tokenize_text(tokenizer, text: str, config: PreprocessingConfig):
+    """Token ids and mask for one transcript, at most max_tokens long.
+
+    For "context [SEP] current" input the start of the context is cut first, so the
+    current line is never truncated while it fits; if it alone does not, the context
+    is dropped. Ids match tokenizing the joined string whenever nothing is cut.
+    """
+    context, separator, current = text.rpartition(CONTEXT_SEPARATOR)
+    if separator:
+        current_ids = tokenizer(current, add_special_tokens=False)["input_ids"]
+        room = config.max_tokens - 3 - len(current_ids)  # [CLS] context [SEP] current [SEP]
+        if room < 1:
+            text = current
+        else:
+            context_ids = tokenizer(context, add_special_tokens=False)["input_ids"][-room:]
+            cls, sep = [tokenizer.cls_token_id], [tokenizer.sep_token_id]
+            ids = torch.tensor([cls + context_ids + sep + current_ids + sep])
+            return {"input_ids": ids, "attention_mask": torch.ones_like(ids)}
+    return tokenizer(text, return_tensors="pt", truncation=True, max_length=config.max_tokens)
 
 
 def save_checkpoint(
