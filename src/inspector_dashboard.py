@@ -12,18 +12,21 @@ from urllib.parse import urlsplit
 
 
 class InspectorDashboard:
-    def __init__(self, port=8765):
+    def __init__(self, port=8765, page="inspector.html", actions=None):
         self.lock = threading.Lock()
         self.state = {"status": "loading", "source": "initializing", "history": []}
         self.history = deque(maxlen=20)
         self.jpeg = None
         self.stop_requested = threading.Event()
         self.on_stop = None
+        # Extra POST endpoints, e.g. {"/reset": callback(payload)}; the JSON body is the
+        # payload, the return value the JSON reply; same session token as /stop.
+        self.actions = dict(actions or {})
         token = secrets.token_urlsafe(18)
         dashboard = self
         html = (
             Path(__file__)
-            .with_name("inspector.html")
+            .with_name(page)
             .read_text()
             .replace("SESSION_TOKEN", token)
         )
@@ -64,11 +67,25 @@ class InspectorDashboard:
                     self.reply(b"Not found", "text/plain", 404)
 
             def do_POST(self):
+                path = urlsplit(self.path).path
                 if (
-                    urlsplit(self.path).path != "/stop"
+                    path not in ("/stop", *dashboard.actions)
                     or self.headers.get("X-Session") != token
                 ):
                     self.reply(b"Forbidden", "text/plain", 403)
+                    return
+                if path in dashboard.actions:
+                    length = int(self.headers.get("Content-Length") or 0)
+                    if length > 16384:
+                        self.reply(b"Payload too large", "text/plain", 413)
+                        return
+                    try:
+                        payload = json.loads(self.rfile.read(length) or b"{}")
+                        result = dashboard.actions[path](payload)
+                    except (ValueError, KeyError) as error:
+                        self.reply(json.dumps({"error": str(error)}).encode(), "application/json", 400)
+                        return
+                    self.reply(json.dumps(result or {}).encode(), "application/json")
                     return
                 dashboard.stop_requested.set()
                 if dashboard.on_stop:
@@ -103,7 +120,7 @@ class InspectorDashboard:
                 self.history.appendleft(
                     {
                         k: event.get(k)
-                        for k in ("start_sec", "end_sec", "text", "status", "emotion")
+                        for k in ("start_sec", "end_sec", "text", "status", "emotion", "comparison")
                     }
                 )
             elif event.get("event") == "stream_summary":

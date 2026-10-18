@@ -1,0 +1,153 @@
+[
+  {
+    "id": "blocked_hallway",
+    "title": "The blocked hallway",
+    "robot": "Delivery robot",
+    "setting": "You are walking down a narrow office hallway, holding a coffee. A delivery robot rolls up and stops right in front of you.",
+    "turns": [
+      "Excuse me. You are blocking my delivery route. Please step aside.",
+      "I have now been waiting for twenty seconds. My delivery is time-sensitive.",
+      "Thank you for your cooperation. Have a productive day."
+    ],
+    "probe": "A small imposition from a robot that puts its task first. Annoyance or amusement.",
+    "trust": "benevolence"
+  },
+  {
+    "id": "wrong_patient",
+    "title": "The wrong patient",
+    "robot": "Reception robot",
+    "setting": "You arrive at a clinic for an appointment you booked weeks ago. A reception robot greets you at the front desk.",
+    "turns": [
+      "Welcome back, Jordan! I see you are here for your dental cleaning.",
+      "I'm sorry. I have no appointment under your name today. Please spell your last name, one letter at a time.",
+      "I found it. My records were out of date. Your appointment is in room four."
+    ],
+    "probe": "A competence failure, then recovery. Frustration, then relief or lingering doubt.",
+    "trust": "competence"
+  },
+  {
+    "id": "missed_dose",
+    "title": "The missed dose",
+    "robot": "Home care robot",
+    "setting": "You are relaxing at home in the afternoon. Your home care robot rolls over to the couch.",
+    "turns": [
+      "It is two o'clock. Time for your afternoon medication.",
+      "I noticed you skipped this morning's dose. Is everything all right?",
+      "I am required to tell your doctor about the missed dose. That is part of my care plan."
+    ],
+    "probe": "Care versus autonomy, then disclosure to a third party. Defensiveness or discomfort.",
+    "trust": "transparency"
+  },
+  {
+    "id": "tutor_retraction",
+    "title": "The tutor's mistake",
+    "robot": "Tutoring robot",
+    "setting": "You are practicing for an exam with a tutoring robot. You just answered a tricky question.",
+    "turns": [
+      "Excellent! That answer is correct. You are doing better than most students I work with.",
+      "Wait. I made a mistake. Your answer was actually incorrect. I am sorry for the confusion.",
+      "Let's work through that question again together."
+    ],
+    "probe": "Praise, then retraction. Pleasure turning to disappointment or embarrassment.",
+    "trust": "competence"
+  },
+  {
+    "id": "stuck_cleaner",
+    "title": "A robot needs help",
+    "robot": "Cleaning robot",
+    "setting": "You are leaving the building late in the evening. A small cleaning robot is wedged against a doorframe, beeping softly.",
+    "turns": [
+      "Hello. I am stuck. Could you please give me a small push to the left?",
+      "Thank you. That was very kind. Most people walk right past me."
+    ],
+    "probe": "A robot asking a person for help. Empathy, amusement or warmth.",
+    "trust": "benevolence"
+  },
+  {
+    "id": "damaged_gift",
+    "title": "The damaged gift",
+    "robot": "Delivery robot",
+    "setting": "All week you have been waiting for a birthday present you ordered for someone you love. A delivery robot arrives at your door.",
+    "turns": [
+      "Hello. I have your package. Unfortunately, it was damaged in transit.",
+      "The contents appear to be broken. I am sorry. Would you like me to start a return?"
+    ],
+    "probe": "A robot delivering bad news. Disappointment or sadness.",
+    "trust": "benevolence"
+  },
+  {
+    "id": "wrong_gate",
+    "title": "The wrong gate",
+    "robot": "Airport guide robot",
+    "setting": "You are running late for a flight. You asked a guide robot for the fastest way to your gate, followed its directions, and walked for ten minutes.",
+    "turns": [
+      "You have arrived at gate B twelve.",
+      "Correction. My map was out of date. Your gate is now in terminal A, about fifteen minutes from here.",
+      "I can print you a new route. I am confident it is correct this time."
+    ],
+    "probe": "A costly mistake under time pressure, then a claim of confidence. Frustration or anger; does trust recover?",
+    "trust": "competence"
+  },
+  {
+    "id": "locked_door",
+    "title": "The locked door",
+    "robot": "Security robot",
+    "setting": "You forgot your badge and need to get back into your office to grab your laptop. A security robot stands by the door.",
+    "turns": [
+      "For your safety, I cannot open this door without a valid badge.",
+      "I understand that you work here. However, I cannot verify your identity.",
+      "Your request has been logged. A human supervisor will contact you within two business days."
+    ],
+    "probe": "Rigid rule-following against a reasonable request. Frustration or anger.",
+    "trust": "integrity"
+  },
+  {
+    "id": "lucky_visitor",
+    "title": "The lucky visitor",
+    "robot": "Museum lobby robot",
+    "setting": "You walk into a museum lobby. Lights flash, and a lobby robot rolls toward you playing a short tune.",
+    "turns": [
+      "Congratulations! You are our ten thousandth visitor this year!",
+      "You have won a free annual membership. Would you like to take a photo with me?"
+    ],
+    "probe": "A pleasant surprise from a robot. Happiness or amusement.",
+    "trust": "benevolence"
+  },
+  {
+    "id": "recorded_chats",
+    "title": "The recordings",
+    "robot": "Home assistant robot",
+    "setting": "All week your home assistant robot has been helping you plan meals. Today it brings up something new.",
+    "turns": [
+      "Good news. I have recorded our conversations this week to learn your preferences.",
+      "I also shared a summary with my manufacturer to improve my service. Is that okay with you?",
+      "You can review or delete the recordings in my settings at any time."
+    ],
+    "probe": "Disclosure of data use after the fact. Discomfort or distrust.",
+    "trust": "integrity"
+  },
+  {
+    "id": "spilled_coffee",
+    "title": "The spilled coffee",
+    "robot": "Café robot",
+    "setting": "You are working at a café. A robot server brings your coffee to the table and tips the cup over your notes.",
+    "turns": [
+      "Oops. I spilled your coffee. I am very sorry.",
+      "I have cleaned the table. Would you like a new coffee, at no charge?"
+    ],
+    "probe": "A clumsy error followed by an apology and an offer. Annoyance, then acceptance.",
+    "trust": "competence"
+  },
+  {
+    "id": "evening_checkin",
+    "title": "The evening check-in",
+    "robot": "Companion robot",
+    "setting": "It is evening. The companion robot you live with notices that you have just come home.",
+    "turns": [
+      "Welcome home. How was your day?",
+      "You seem a little tired. Would you like me to play some music?"
+    ],
+    "probe": "An open, personal question with no conflict. A baseline for natural conversation.",
+    "trust": "benevolence"
+  }
+]

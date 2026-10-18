@@ -52,6 +52,12 @@ def parse_args(argv=None):
         type=Path,
         help="Versioned compact visual head; defaults the audio/text reference to the MVP baseline",
     )
+    parser.add_argument(
+        "--context",
+        choices=("off", "balanced", "max_f1"),
+        default="off",
+        help="Causal smoothing of emotion over the speaker's previous utterances (src/emotion_context.py)",
+    )
     parser.add_argument("--camera-index", type=int)
     parser.add_argument("--microphone-index", type=int)
     parser.add_argument(
@@ -200,7 +206,26 @@ def main(argv=None):
         args.output.parent.mkdir(parents=True, exist_ok=True)
         output = args.output.open("w")
 
+    context = None
+    if args.context != "off":
+        from src.emotion_context import SpeakerContext
+
+        context = SpeakerContext.preset(args.context)
+
     def emit(result):
+        if context and result.get("emotion"):
+            # One speaker per run, so one context state. The dashboard records
+            # this same dict after emit, so it shows the smoothed emotion too.
+            result["utterance_emotion"] = result["emotion"]
+            probabilities = context.update(result["emotion"]["probabilities"])
+            label = max(probabilities, key=probabilities.get)
+            result["emotion"] = {
+                **result["emotion"],
+                "label": label,
+                "label_index": list(probabilities).index(label),
+                "probabilities": probabilities,
+                "context": args.context,
+            }
         line = json.dumps(result, allow_nan=False)
         print(line, flush=True)
         if output:

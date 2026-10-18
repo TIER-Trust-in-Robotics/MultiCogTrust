@@ -40,6 +40,50 @@ available. The Stop button ends capture; `--duration` provides a bounded run.
 For repeatable recorded input, add `--replay-dialog Ses01F_impro01 --speaker F`.
 Licensed IEMOCAP data and locally generated checkpoints are not bundled.
 
+### HRI session demo
+
+`src/live_demo.py` runs a scripted human–robot interaction session. A robot avatar
+speaks short scenario lines (macOS `say`), the participant answers naturally, and
+two audio/text emotion models score each answer side by side:
+- **A** is the deployed checkpoint (current line only).
+- **B** is the same architecture retrained to also read the speaker's previous line.
+
+The face-only model runs in shadow, and speech that overlaps the robot's voice is ignored.
+
+```bash
+brew install portaudio           # needed to build pyaudio (microphone capture)
+uv sync --locked
+uv run python src/live_demo.py   # first run online; later runs can add --offline
+```
+
+The first online run downloads DistilBERT, DistilHuBERT, Whisper tiny.en and
+MobileNetV3. Open `http://127.0.0.1:8765` and allow microphone and camera access.
+Then enter a participant ID, confirm consent and start trials. Scenarios live in
+`src/hri_scenarios.json`.
+
+Useful flags:
+- `--no-camera`: audio and text only.
+- `--robot-voice Fred`: a different robot voice.
+- `--deployed-asr`: the Whisper settings of the Session 4 evaluation. The default decodes faster.
+- `--replay-dialog Ses04F_impro05 --speaker F --silent-robot`: replay a recorded scene instead of the devices. Needs IEMOCAP.
+
+The demo needs three checkpoints that are **not in git**, because they are trained
+on licensed IEMOCAP data. Get them from the project team, or rebuild them with
+IEMOCAP access:
+
+| Path | Model | Rebuild |
+|---|---|---|
+| `models/mvp/audio_text_baseline.pt` | A | `src/train_mvp_baseline.py` (`configs/mvp_day3_baseline.json`) |
+| `models/mvp/context_baseline.pt` | B | `src/train_mvp_context.py` (`configs/mvp_context.json`) |
+| `models/mvp/visual_day5/deployment.pt` | Face head | `src/train_mvp_visual.py`, then `src/select_deployment_fusion.py` |
+
+Copy the files byte-for-byte: the face head checks A's checksum. A rebuilt A
+needs a rebuilt face head; otherwise run with `--no-camera`.
+
+Sessions are recorded only after consent, to `data/processed/hri_sessions/`
+(gitignored). Each holds an event log, one WAV per response, the model outputs
+and the self-reports. The demo is macOS-only for now because the robot voice uses `say`.
+
 ## Days 1–2: restore and verify the inference foundation
 
 Place the licensed IEMOCAP release at `data/IEMOCAP_full_release/`, then run:

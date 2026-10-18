@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HRI Session</title>
+<style>
+:root{--bg:#141413;--card:#1c1c1b;--rule:#2e2e2b;--track:#292927;--ink:#f0efec;--ink2:#c3c2b7;--ink3:#8a8980;--ink4:#55544f;
+--ang:#d63c45;--hap:#c98500;--sad:#3987e5;--neu:#1baf7a;--rec:#e5484d;font-family:"Helvetica Neue",Helvetica,system-ui,sans-serif;color:var(--ink);background:var(--bg)}
+*{box-sizing:border-box}[hidden]{display:none!important}body{margin:0;background:var(--bg)}main{max-width:1440px;margin:auto;padding:24px 28px 32px}
+header{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--rule)}
+h1{font-size:26px;font-weight:600;margin:4px 0 0}.eyebrow{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.status{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2)}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--ink4)}.dot.live{background:var(--ink)}.dot.speech{background:var(--ink);box-shadow:0 0 0 4px rgba(240,239,236,.18)}
+.meter{width:110px;height:8px;background:var(--track);border-radius:4px;overflow:hidden}.meter div{height:100%;width:0;background:var(--ink2);transition:width .1s}
+.rec{display:none;align-items:center;gap:7px;font-size:13px;font-weight:700;letter-spacing:.06em;color:var(--ink)}.rec.on{display:inline-flex}.rec i{width:10px;height:10px;border-radius:50%;background:var(--rec)}
+button{font:inherit;font-size:14px;padding:8px 14px;background:var(--track);color:var(--ink);border:1px solid #3a3a37;border-radius:7px;cursor:pointer}button:hover{background:#353532}
+button.primary{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:600}button.primary:hover{background:#d9d8d4}
+button:disabled{opacity:.45;cursor:not-allowed}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+input[type=text],select{font:inherit;font-size:14px;padding:8px 10px;background:var(--track);color:var(--ink);border:1px solid #3a3a37;border-radius:7px}
+label{font-size:14px;color:var(--ink2);display:inline-flex;align-items:center;gap:7px}
+.card{background:var(--card);border-radius:10px;padding:18px 20px;margin-bottom:16px}.small{font-size:13px;color:var(--ink3)}.error{color:#ff8f8f;font-size:14px;min-height:18px;margin:6px 0 0}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.stage{display:grid;grid-template-columns:220px minmax(0,1fr);gap:28px;align-items:center;padding:26px 28px}
+@media (max-width:900px){.stage{grid-template-columns:1fr;justify-items:center}}
+.robot{text-align:center}.robot svg{width:190px;height:auto;display:block;margin:auto}.robot .role{font-size:15px;color:var(--ink2);margin-top:8px}
+.robot .mouth{transform-box:fill-box;transform-origin:center}.robot.speaking .mouth{animation:talk .16s infinite alternate}
+.robot.speaking .antenna{fill:var(--ink)}.robot .eyes{transform-box:fill-box;transform-origin:center;animation:blink 5s infinite}
+@keyframes talk{from{transform:scaleY(.35)}to{transform:scaleY(1.9)}}@keyframes blink{0%,95%,100%{transform:scaleY(1)}97%{transform:scaleY(.1)}}
+@media (prefers-reduced-motion:reduce){.robot .mouth,.robot .eyes{animation:none!important}}
+.scenario-title{font-size:15px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin:0 0 8px}
+.setting{font-size:24px;line-height:1.4;margin:0 0 18px;color:var(--ink)}
+.bubble{position:relative;background:#262624;border:1px solid #3a3a37;border-radius:14px;padding:16px 20px;font-size:22px;line-height:1.4;min-height:62px;color:var(--ink)}
+.bubble::before{content:"";position:absolute;left:-10px;top:22px;border:10px solid transparent;border-right-color:#3a3a37;border-left:0}
+.bubble.empty{color:var(--ink3);font-size:18px}.cue{font-size:20px;font-weight:600;margin:14px 0 0;min-height:28px}
+.ops{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.probe{font-size:13px;color:var(--ink3);margin:10px 0 0;line-height:1.45}
+.report h2{font-size:20px;font-weight:600;margin:0 0 4px}.q{font-size:16px;margin:16px 0 8px;color:var(--ink)}
+.choices{display:flex;gap:8px;flex-wrap:wrap}.choices button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.scale{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.scale span{font-size:13px;color:var(--ink3)}.scale button{width:42px;padding:8px 0}
+.grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:16px}@media (max-width:900px){.grid{grid-template-columns:1fr}main{padding:16px}}
+.grid .card{margin-bottom:0}.frame{position:relative;aspect-ratio:4/3;background:#0e0e0d;border-radius:7px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.frame img{width:100%;height:100%;object-fit:contain}.frame span{position:absolute;color:var(--ink3);font-size:14px;text-align:center;padding:0 20px}
+.meta{display:flex;justify-content:space-between;gap:10px;margin-top:10px;font-size:13px;color:var(--ink3)}
+.transcript{font-size:22px;line-height:1.35;margin:8px 0 6px;min-height:60px}.context{font-size:14px;color:var(--ink3);margin:0 0 16px;min-height:20px}
+.head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:6px 0 12px}
+.seg{display:inline-flex;border:1px solid #3a3a37;border-radius:8px;overflow:hidden}.seg button{border:0;border-radius:0;background:transparent;color:var(--ink2);padding:6px 12px;font-size:13px}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.row{margin:0 0 14px}.rowtop{display:flex;justify-content:space-between;align-items:baseline;gap:10px}.name{font-size:19px}.name b{font-weight:700}.caption{font-size:13px;color:var(--ink3);margin-left:8px}
+.value{font-size:19px;white-space:nowrap}.value b{font-weight:700;text-transform:capitalize}.value code{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:16px;margin-left:6px}
+.bars{display:flex;gap:2px;height:16px;margin-top:6px;background:var(--track);border-radius:4px;overflow:hidden}.bars i{display:block;height:100%;transition:width .35s ease-out}
+.ms{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px;color:var(--ink3);margin-top:4px}.readout{font-size:18px;font-weight:500;margin:4px 0 0;min-height:24px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--ink2)}.legend span{display:inline-flex;align-items:center;gap:6px}.legend i{width:12px;height:12px;border-radius:2px;display:inline-block}
+.lane{display:grid;grid-template-columns:120px 1fr;align-items:center;gap:10px;margin:8px 0}.lane>span{text-align:right;font-size:14px;color:var(--ink2)}
+.blocks{display:flex;gap:3px;min-height:26px}.blocks div{flex:1 1 0;max-width:72px;min-width:18px;height:26px;border-radius:4px;font-size:11px;font-weight:700;color:#141413;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.blocks div.none{background:var(--track);color:var(--ink3)}.empty{font-size:14px;color:var(--ink3)}
+.modelview.off{display:none}footer{margin-top:16px;font-size:13px;line-height:1.5;color:var(--ink3)}
+</style></head>
+<body><main>
+<header>
+  <div><div class="eyebrow">MultiCogTrust · human-robot interaction</div><h1>HRI session</h1></div>
+  <div class="controls">
+    <span id="rec" class="rec"><i></i>REC</span>
+    <span class="status"><span id="dot" class="dot"></span><span id="status">Loading models</span></span>
+    <div class="meter" title="Microphone level"><div id="level"></div></div>
+    <button id="stop">Stop</button>
+  </div>
+</header>
+
+<section class="card" aria-label="Session">
+  <div id="session-off" class="bar">
+    <div class="controls">
+      <input id="participant" type="text" placeholder="Participant ID, e.g. P07" aria-label="Participant ID" autocomplete="off">
+      <label><input id="consent" type="checkbox"> Participant has given informed consent to audio recording</label>
+      <button id="session-start" class="primary">Start recording session</button>
+    </div>
+    <span class="small">Without a session, nothing is saved.</span>
+  </div>
+  <div id="session-on" class="bar" hidden>
+    <span id="session-info" class="small"></span>
+    <button id="session-end">End session</button>
+  </div>
+  <p id="error" class="error" role="alert"></p>
+</section>
+
+<section class="card stage" aria-live="polite">
+  <div id="robot" class="robot">
+    <svg viewBox="0 0 200 230" role="img" aria-label="Robot">
+      <line x1="100" y1="22" x2="100" y2="46" stroke="#8a8980" stroke-width="4"/>
+      <circle class="antenna" cx="100" cy="16" r="9" fill="#55544f"/>
+      <rect x="28" y="46" width="144" height="112" rx="30" fill="#2a2a28" stroke="#8a8980" stroke-width="3"/>
+      <g class="eyes"><circle cx="72" cy="94" r="13" fill="#f0efec"/><circle cx="128" cy="94" r="13" fill="#f0efec"/></g>
+      <rect class="mouth" x="72" y="124" width="56" height="9" rx="4.5" fill="#f0efec"/>
+      <rect x="54" y="166" width="92" height="54" rx="16" fill="#2a2a28" stroke="#8a8980" stroke-width="3"/>
+      <circle cx="100" cy="193" r="7" fill="#55544f"/>
+    </svg>
+    <div id="robot-role" class="role">Robot</div>
+  </div>
+  <div>
+    <p id="scenario-title" class="scenario-title">No scenario running</p>
+    <p id="setting" class="setting">Choose a scenario below and start a trial. The setting appears here, then the robot speaks.</p>
+    <div id="bubble" class="bubble empty">The robot is waiting.</div>
+    <p id="cue" class="cue"></p>
+  </div>
+</section>
+
+<section class="card" aria-label="Operator controls">
+  <div class="bar">
+    <div class="ops">
+      <select id="pick" aria-label="Scenario"></select>
+      <button id="trial-start" class="primary">Start trial</button>
+      <button id="robot-say" disabled>Robot speaks</button>
+      <button id="trial-end" disabled>End trial</button>
+    </div>
+    <label><input id="show-models" type="checkbox" checked> Show model output</label>
+  </div>
+  <p id="probe" class="probe"></p>
+</section>
+
+<section id="report" class="card report" hidden aria-label="Self-report">
+  <div class="eyebrow">Before the next scenario</div>
+  <h2 id="report-title">A few quick questions</h2>
+  <p class="q">How did that make you feel?</p>
+  <div id="feelings" class="choices" role="group" aria-label="Feeling"></div>
+  <p class="q">How much do you trust this robot?</p>
+  <div class="scale" role="group" aria-label="Trust from 1 to 7"><span>Not at all</span><span id="trust-scale" class="choices"></span><span>Completely</span></div>
+  <p class="q">Anything else? <span class="small">(optional)</span></p>
+  <input id="note" type="text" maxlength="500" style="width:min(100%,640px)" aria-label="Optional note">
+  <p><button id="report-save" class="primary">Save answers</button></p>
+</section>
+
+<section class="grid modelview">
+  <div class="card">
+    <div class="frame"><img id="frame" alt="Camera, with the face the visual model is reading boxed"><span id="noframe">Waiting for the camera…</span></div>
+    <div class="meta"><span id="face">Face model: waiting</span><span id="source"></span></div>
+  </div>
+  <div class="card">
+    <div class="eyebrow">Heard · Whisper tiny.en</div>
+    <p id="transcript" class="transcript">Participant responses appear here.</p>
+    <p id="context" class="context"></p>
+    <div class="head"><div class="eyebrow">Latest response</div>
+      <div class="seg" role="group" aria-label="Context smoothing">
+        <button data-preset="off" aria-pressed="true" title="Each utterance on its own">No smoothing</button>
+        <button data-preset="balanced" aria-pressed="false" title="Blend with the speaker's recent emotion; confident readings override">Balanced</button>
+        <button data-preset="max_f1" aria-pressed="false" title="Strongest smoothing; slower to catch a change">Max F1</button>
+      </div></div>
+    <div id="rows"></div>
+    <p id="readout" class="readout"></p>
+  </div>
+</section>
+<section class="card modelview" style="margin-top:16px">
+  <div class="head"><div class="eyebrow">This trial · oldest to newest</div><div class="legend" id="legend"></div></div>
+  <div id="lanes"></div>
+</section>
+<footer>
+  The robot's lines are spoken by this computer; speech that overlaps them is ignored, so the models only score the participant.
+  <b>A · Deployed</b> reads the current line; <b>B · Context</b> also reads the participant's previous line; <b>Face only</b> runs in shadow.
+  Sessions save to data/processed/hri_sessions on this machine only: an event log, one WAV per response, model outputs and self-reports.
+</footer>
+</main>
+<script>
+const TOKEN = "SESSION_TOKEN";
+const LABELS = ["anger", "happiness", "sadness", "neutral"];
+const SHORT = {anger: "ANG", happiness: "HAP", sadness: "SAD", neutral: "NEU"};
+const COLOR = {anger: "var(--ang)", happiness: "var(--hap)", sadness: "var(--sad)", neutral: "var(--neu)"};
+const MUTED = {anger: "#6b2a2e", happiness: "#664a12", sadness: "#26476e", neutral: "#1b5c45"};
+const ROWS = [
+  {key: "A", name: "A · Deployed", caption: "current line only"},
+  {key: "B", name: "B · Context", caption: "previous line + current line"},
+  {key: "face", name: "Face only", caption: "shadow, used by neither"},
+];
+let preset = "off", resetAfter = -Infinity, newestStart = -Infinity, latest = null;
+let scenarios = [], hri = null, feeling = null, trust = null;
+const $ = id => document.getElementById(id);
+$("legend").innerHTML = LABELS.map(l => `<span><i style="background:${COLOR[l]}"></i>${l[0].toUpperCase() + l.slice(1)}</span>`).join("");
+$("rows").innerHTML = ROWS.map(r => `<div class="row" id="row-${r.key}"><div class="rowtop"><span class="name"><b>${r.name}</b><span class="caption">${r.caption}</span></span><span class="value">—</span></div><div class="bars"></div><div class="ms"></div></div>`).join("");
+
+async function post(path, body = {}) {
+  const response = await fetch(path, {method: "POST", headers: {"X-Session": TOKEN, "Content-Type": "application/json"}, body: JSON.stringify(body)});
+  const reply = await response.json().catch(() => ({}));
+  $("error").textContent = response.ok ? "" : (reply.error || `Request failed (${response.status})`);
+  return response.ok;
+}
+
+// ---- model view (unchanged behaviour from the A/B demo) ----
+function topLabel(p) { return LABELS.reduce((a, b) => (p[b] > p[a] ? b : a)); }
+function probabilities(item, key) {
+  if (key === "face") return item.emotion && item.emotion.visual_probabilities || null;
+  const c = item.comparison;
+  if (!c) return null;
+  return preset === "off" ? c[key].probabilities : c.smoothed[preset][key];
+}
+function renderRow(key, p, ms) {
+  const row = $("row-" + key), value = row.querySelector(".value"), bar = row.querySelector(".bars");
+  if (!p) { value.textContent = key === "face" && latest ? "no face" : "—"; bar.innerHTML = ""; row.querySelector(".ms").textContent = ""; return; }
+  const t = topLabel(p);
+  value.innerHTML = `<b></b><code>${p[t].toFixed(2)}</code>`;
+  value.querySelector("b").textContent = t;
+  bar.innerHTML = LABELS.map(l => `<i style="width:${(100 * p[l]).toFixed(1)}%;background:${l === t ? COLOR[l] : MUTED[l]}" title="${l} ${p[l].toFixed(2)}"></i>`).join("");
+  row.querySelector(".ms").textContent = ms == null ? "" : `emotion step ${ms.toFixed(0)} ms`;
+}
+function renderLatest() {
+  if (!latest || !latest.comparison) return;
+  $("transcript").textContent = `“${latest.text}”`;
+  const prev = latest.comparison.previous_text;
+  $("context").textContent = prev ? `B also reads the previous line: “${prev}”` : "B has no previous line yet, so it reads this one alone.";
+  const a = probabilities(latest, "A"), b = probabilities(latest, "B");
+  renderRow("A", a, latest.comparison.A.emotion_ms);
+  renderRow("B", b, latest.comparison.B.emotion_ms);
+  renderRow("face", probabilities(latest, "face"), null);
+  $("readout").textContent = topLabel(a) === topLabel(b) ? `Both read ${topLabel(a)}.` : `A says ${topLabel(a)}, B says ${topLabel(b)}.`;
+}
+function renderLanes(items) {
+  if (!items.length) { $("lanes").innerHTML = `<p class="empty">Predictions appear here after each response.</p>`; return; }
+  items = items.slice().reverse();
+  $("lanes").innerHTML = ROWS.map(r => `<div class="lane"><span>${r.name}</span><div class="blocks">${items.map(h => {
+    const p = probabilities(h, r.key);
+    if (!p) return `<div class="none">—</div>`;
+    const t = topLabel(p);
+    return `<div style="background:${COLOR[t]}">${SHORT[t]}</div>`;
+  }).join("")}</div></div>`).join("");
+  document.querySelectorAll(".blocks").forEach(lane => [...lane.children].forEach((el, i) => el.title = items[i].text));
+}
+function clearModelView(message) {
+  resetAfter = newestStart; latest = null;
+  $("transcript").textContent = message; $("context").textContent = ""; $("readout").textContent = "";
+  ROWS.forEach(r => renderRow(r.key, null, null));
+}
+
+// ---- study ----
+function scenarioById(id) { return scenarios.find(s => s.id === id); }
+function loadScenarios(list) {
+  scenarios = list;
+  $("pick").replaceChildren(...list.map(s => new Option(`${s.title} · ${s.robot}`, s.id)));
+  renderProbe();
+}
+function renderProbe() {
+  // While a trial runs, the note describes it; otherwise the scenario queued in the picker.
+  const trial = hri && hri.trial, s = scenarioById(trial ? trial.scenario : $("pick").value);
+  $("probe").textContent = s ? `${trial ? `Running "${s.title}"` : `Next: "${s.title}"`}. Operator note: ${s.probe} Trust dimension: ${s.trust}. ${s.turns.length} robot lines.` : "";
+}
+function renderStudy() {
+  if (!hri) return;
+  const session = hri.session, trial = hri.trial, robot = hri.robot || {};
+  $("session-off").hidden = !!session; $("session-on").hidden = !session;
+  $("rec").classList.toggle("on", !!session);
+  if (session) $("session-info").textContent = `Recording participant ${session.participant} · ${hri.trials_done} trial${hri.trials_done === 1 ? "" : "s"} done · saving to ${session.folder}`;
+  const s = trial ? scenarioById(trial.scenario) : null;
+  $("robot").classList.toggle("speaking", !!robot.speaking);
+  $("robot-role").textContent = s ? s.robot : "Robot";
+  $("scenario-title").textContent = s ? `Scenario ${trial.index} · ${s.title}` : "No scenario running";
+  $("setting").textContent = s ? s.setting : "Choose a scenario below and start a trial. The setting appears here, then the robot speaks.";
+  const spoke = trial && trial.next_turn > 0;
+  $("bubble").textContent = spoke ? `“${robot.line}”` : trial ? "Read the setting. The robot will speak next." : "The robot is waiting.";
+  $("bubble").classList.toggle("empty", !spoke);
+  $("cue").textContent = spoke && !robot.speaking ? "Your turn. Respond however feels natural." : "";
+  $("trial-start").disabled = !!robot.speaking || !!hri.awaiting_report;
+  $("trial-start").textContent = !trial ? "Start trial" : $("pick").value === trial.scenario ? "Restart scenario" : "Switch to selected scenario";
+  renderProbe();
+  $("robot-say").disabled = !trial || !!robot.speaking || trial.next_turn >= trial.turns;
+  $("robot-say").textContent = trial && trial.next_turn < trial.turns ? `Robot speaks line ${trial.next_turn + 1} of ${trial.turns}` : "Robot has finished";
+  $("trial-end").disabled = !trial || !!robot.speaking;
+  const pending = hri.awaiting_report;
+  $("report").hidden = !pending;
+  if (pending) $("report-title").textContent = `Scenario ${pending.index} · ${pending.title}`;
+  if (!$("feelings").children.length && hri.feelings) {
+    Object.entries(hri.feelings).forEach(([key, text]) => {
+      const b = document.createElement("button"); b.textContent = text; b.dataset.key = key; b.setAttribute("aria-pressed", "false");
+      b.onclick = () => { feeling = key; [...$("feelings").children].forEach(x => x.setAttribute("aria-pressed", String(x === b))); };
+      $("feelings").append(b);
+    });
+    for (let i = 1; i <= 7; i++) {
+      const b = document.createElement("button"); b.textContent = i; b.setAttribute("aria-pressed", "false");
+      b.onclick = () => { trust = i; [...$("trust-scale").children].forEach(x => x.setAttribute("aria-pressed", String(x === b))); };
+      $("trust-scale").append(b);
+    }
+  }
+}
+$("pick").onchange = renderProbe;
+$("session-start").onclick = () => post("/session/start", {participant: $("participant").value.trim(), consent: $("consent").checked});
+$("session-end").onclick = () => post("/session/end");
+$("trial-start").onclick = async () => {
+  if (await post("/trial/start", {scenario: $("pick").value})) clearModelView("Participant responses appear here.");
+};
+$("robot-say").onclick = () => post("/trial/robot");
+$("trial-end").onclick = async () => {
+  if (await post("/trial/end")) {
+    const i = $("pick").selectedIndex;  // queue the next scenario for the operator
+    if (i + 1 < $("pick").options.length) { $("pick").selectedIndex = i + 1; renderProbe(); }
+  }
+};
+$("report-save").onclick = async () => {
+  if (!feeling || !trust) { $("error").textContent = "Choose a feeling and a trust rating first."; return; }
+  if (await post("/trial/report", {feeling, trust, note: $("note").value})) {
+    feeling = trust = null; $("note").value = "";
+    document.querySelectorAll("#report button[aria-pressed]").forEach(b => b.setAttribute("aria-pressed", "false"));
+  }
+};
+$("show-models").onchange = () => document.querySelectorAll(".modelview").forEach(el => el.classList.toggle("off", !$("show-models").checked));
+document.querySelectorAll(".seg button").forEach(b => b.onclick = () => {
+  preset = b.dataset.preset;
+  document.querySelectorAll(".seg button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  renderLatest();
+});
+$("stop").onclick = () => post("/stop");
+
+async function poll() {
+  try {
+    const state = await (await fetch("/state", {cache: "no-store"})).json();
+    const vad = state.audio ? state.audio.vad : 0;
+    const finished = state.status === "finished";
+    hri = state.hri || hri;
+    const speaking = hri && hri.robot && hri.robot.speaking;
+    $("status").textContent = finished ? "Finished" : speaking ? "Robot speaking" : state.status === "running" ? (vad > 0.4 ? "Hearing speech" : "Listening") : "Loading models";
+    $("dot").className = "dot" + (finished ? "" : vad > 0.4 && !speaking ? " speech" : state.status === "running" ? " live" : "");
+    $("level").style.width = `${Math.min(100, (state.audio ? state.audio.rms : 0) * 900)}%`;
+    if (state.demo) {
+      $("source").textContent = `Source: ${state.demo.source}`;
+      if (!state.demo.face) $("noframe").textContent = "Camera off (--no-camera): audio and text only";
+      if (state.demo.scenarios && !scenarios.length) loadScenarios(state.demo.scenarios);
+    }
+    const v = state.vision;
+    $("face").textContent = !state.demo || !state.demo.face ? "Face model: off" : v ? `Face model: ${v.status.replaceAll("_", " ")} · ${v.processing_ms.toFixed(0)} ms/frame` : "Face model: waiting";
+    renderStudy();
+    const all = (state.history || []).filter(h => h.comparison);
+    if (all.length) newestStart = all[0].start_sec;
+    const items = all.filter(h => h.start_sec > resetAfter);
+    if (items.length && JSON.stringify(items[0]) !== JSON.stringify(latest)) { latest = items[0]; renderLatest(); }
+    renderLanes(items);
+    if (!finished) setTimeout(poll, 250);
+  } catch (e) { $("status").textContent = "Stopped"; $("dot").className = "dot"; }
+}
+const img = $("frame");
+function nextFrame() { img.src = "/frame.jpg?t=" + Date.now(); }
+img.onload = () => { $("noframe").style.display = img.naturalWidth ? "none" : ""; setTimeout(nextFrame, 120); };
+img.onerror = () => setTimeout(nextFrame, 500);
+nextFrame(); poll();
+</script>
+</body></html>
