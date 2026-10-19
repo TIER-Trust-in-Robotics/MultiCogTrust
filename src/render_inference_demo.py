@@ -51,8 +51,6 @@ CHECKPOINT = ROOT / "models/mvp/audio_text_baseline.pt"
 CACHED_PREDICTIONS = ROOT / "data/processed/mvp/asr_validation/predictions.jsonl"
 CACHED_TRANSCRIPTS = ROOT / "data/processed/mvp/asr_validation/transcripts.jsonl"
 OUTPUT_DIR = ROOT / "data/processed/demo"
-CONTROLS_DIR = ROOT / "data/processed/benchmarks/iemocap_controls_v1"
-CONTROL_SEEDS = (42, 43, 44)
 # deployment.pt is selected.pt's head at face weight 0 (it runs in shadow);
 # selected.pt mixes it in at 0.25.
 VISUAL_DIR = ROOT / "models/mvp/visual_day5"
@@ -273,42 +271,26 @@ def clip_rows(spec, metadata_path):
 
 
 class PooledControls:
-    """Text-only and voice-only development controls (benchmark_controls.py).
+    """Text-only and voice-only readings (src/modality_controls.py) for the replayed lines.
 
-    Each is a small head on the mean-pooled frozen features of the deployed
-    model's own encoders; probabilities are averaged over the three seeds.
-    They are comparison models, not part of the deployed prediction.
+    The renderer encodes each line itself, so it pools the deployed encoders' outputs here;
+    the live tool reuses its shared encodings instead. Both give identical readings.
     """
 
     def __init__(self, predictor):
-        import torch
-        from torch import nn
+        from src.modality_controls import ModalityControls
 
         self.predictor = predictor
-        self.heads = {}
-        for mode in ("text", "audio"):
-            self.heads[mode] = []
-            for seed in CONTROL_SEEDS:
-                checkpoint = torch.load(CONTROLS_DIR / f"{mode}_{seed}.pt", map_location="cpu", weights_only=False)
-                head = nn.Sequential(
-                    nn.Linear(checkpoint["input_dim"], checkpoint["hidden_dim"]), nn.LeakyReLU(),
-                    nn.Dropout(checkpoint["dropout"]), nn.Linear(checkpoint["hidden_dim"], 4),
-                )
-                head.load_state_dict(checkpoint["state_dict"])
-                head.eval()
-                self.heads[mode].append((head, checkpoint["mean"].float(), checkpoint["scale"].float()))
+        self.controls = ModalityControls()
 
     def pooled_features(self, text, audio, sample_rate):
         import torch
 
-        from src.emotion_checkpoint import prepare_audio
+        from src.emotion_checkpoint import prepare_audio, tokenize_text
 
         predictor = self.predictor
         with torch.inference_mode():
-            tokens = predictor.tokenizer(
-                text, return_tensors="pt", truncation=True,
-                max_length=predictor.preprocessing.max_tokens,
-            )
+            tokens = tokenize_text(predictor.tokenizer, text, predictor.preprocessing)
             text_features = predictor.model.encode_text(
                 tokens["input_ids"].to(predictor.device), tokens["attention_mask"].to(predictor.device)
             )[0].mean(0).cpu()
@@ -317,17 +299,8 @@ class PooledControls:
         return {"text": text_features, "audio": audio_features}
 
     def predict(self, text, audio, sample_rate):
-        import torch
-
-        features = self.pooled_features(text, audio, sample_rate)
-        with torch.inference_mode():
-            return {
-                mode: torch.stack([
-                    head(((features[mode] - mean) / scale)[None]).softmax(-1)[0]
-                    for head, mean, scale in self.heads[mode]
-                ]).mean(0).tolist()
-                for mode in self.heads
-            }
+        readings = self.controls.predict(self.pooled_features(text, audio, sample_rate))
+        return {mode: [p[label] for label in LABELS] for mode, p in readings.items()}
 
 
 def run_inference(rows, device):

@@ -45,6 +45,7 @@ import soundfile as sf
 from src.emotion_checkpoint import EMOTION_LABELS, prepare_audio, tokenize_text
 from src.emotion_context import PRESETS, SpeakerContext
 from src.inference_pipeline import FAST_ASR, SpeechProcessor
+from src.modality_controls import ModalityControls
 
 SCENARIOS = Path(__file__).with_name("hri_scenarios.json")
 SESSIONS = ROOT / "data/processed/hri_sessions"
@@ -153,8 +154,11 @@ class SharedEncoders:
         # B's own encoder copies are never used again; dropping them frees roughly 300 MB.
         model_b.model.text_encoder = model_b.model.audio_encoder = None
 
-    def predict(self, text_a, text_b, audio, sample_rate):
-        """Returns {"A": (prediction, ms), "B": (prediction, ms)}; each ms includes the shared audio encoding."""
+    def predict(self, text_a, text_b, audio, sample_rate, controls=None):
+        """Returns {"A": (prediction, ms), "B": (prediction, ms)}; each ms includes the shared audio encoding.
+
+        With controls, also "modalities": (text-only and voice-only probabilities, ms), read from the
+        mean-pooled encodings of the current line and the audio that A and B already computed."""
         import torch
 
         from src.emotion_fusion_infer import EmotionPrediction
@@ -179,16 +183,22 @@ class SharedEncoders:
                 prediction = EmotionPrediction(predictor.label_names[index], index,
                                                {n: float(probabilities[i]) for i, n in enumerate(predictor.label_names)})
                 out[name] = (prediction, audio_ms + 1000 * (time.perf_counter() - started))
+            if controls is not None:
+                started = time.perf_counter()
+                pooled = {"text": texts[text_a][0][0].mean(0), "audio": audio_embeddings[0].mean(0)}
+                out["modalities"] = (controls.predict(pooled), 1000 * (time.perf_counter() - started))
         return out
 
 
 class ComparisonProcessor:
     """One Whisper pass, then A on the current line and B on previous + current line."""
 
-    def __init__(self, transcriber, model_a, model_b, robot=None, audio_sink=None, shared=None, asr_options=None):
+    def __init__(self, transcriber, model_a, model_b, robot=None, audio_sink=None, shared=None, asr_options=None,
+                 controls=None):
         self.a = SpeechProcessor(transcriber, None if shared else model_a, asr_options)
         self.a.preprocessing = model_a.preprocessing
         self.model_a, self.b, self.shared = model_a, model_b, shared
+        self.controls = controls  # text-only / voice-only readings; needs shared encoders
         self.robot = robot
         self.audio_sink = audio_sink  # called with each scored segment; returns a saved path or None
         self.lock = threading.Lock()
@@ -217,7 +227,7 @@ class ComparisonProcessor:
         prompt = f"{previous} [SEP] {text}" if previous else text
         if self.shared:
             started = time.perf_counter()
-            both = self.shared.predict(text, prompt, audio, sample_rate)
+            both = self.shared.predict(text, prompt, audio, sample_rate, self.controls)
             result["timings_ms"]["emotion_both_models"] = 1000 * (time.perf_counter() - started)
             (a_prediction, a_ms), (prediction, b_ms) = both["A"], both["B"]
             result["emotion"] = asdict(a_prediction)
@@ -237,6 +247,9 @@ class ComparisonProcessor:
             "B": {"probabilities": raw["B"], "emotion_ms": b_ms},
             "smoothed": smoothed,
         }
+        if self.shared and "modalities" in both:
+            modalities, ms = both["modalities"]
+            result["comparison"]["modalities"] = {**modalities, "ms": ms}
         result["timings_ms"]["context_model"] = b_ms
         return result
 
@@ -430,7 +443,10 @@ def main(argv=None):
                                cpu_threads=2 if args.deployed_asr else 4, local_files_only=args.offline)
     robot = Robot(args.robot_voice, args.robot_rate, args.silent_robot)
     shared = SharedEncoders(model_a, model_b)
-    processor = ComparisonProcessor(transcriber, model_a, model_b, robot, shared=shared,
+    controls = ModalityControls.load()
+    if controls is None:
+        print("Text-only and voice-only models not installed (models/mvp/controls/); those rows stay hidden.")
+    processor = ComparisonProcessor(transcriber, model_a, model_b, robot, shared=shared, controls=controls,
                                     asr_options=None if args.deployed_asr else FAST_ASR)
     source = None
     if args.replay_dialog:
@@ -456,12 +472,13 @@ def main(argv=None):
         "presets": list(PRESETS),
         "models": {"A": A_CHECKPOINT.name, "B": B_CHECKPOINT.name},
         "face": VISUAL_CHECKPOINT.name if use_vision else None,
+        "modalities": controls is not None,
         "source": f"{args.replay_dialog} ({args.speaker})" if source else "microphone + camera",
         "scenarios": scenarios,
     })
     silence = np.zeros(16000 * 6, np.float32)
     for seconds in (1, 6):  # warm-up is not utterance latency
-        shared.predict("Ready.", "Ready for the next utterance. [SEP] Ready.", silence[: 16000 * seconds], 16000)
+        shared.predict("Ready.", "Ready for the next utterance. [SEP] Ready.", silence[: 16000 * seconds], 16000, controls)
     output = args.output.open("w") if args.output else None
 
     def emit(result):

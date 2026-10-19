@@ -43,12 +43,14 @@ Licensed IEMOCAP data and locally generated checkpoints are not bundled.
 ### HRI session demo
 
 `src/live_demo.py` runs a scripted human–robot interaction session. A robot avatar
-speaks short scenario lines (macOS `say`), the participant answers naturally, and
-two audio/text emotion models score each answer side by side:
-- **A** is the deployed checkpoint (current line only).
-- **B** is the same architecture retrained to also read the speaker's previous line.
+speaks short scenario lines (macOS `say`), and the participant answers naturally.
+For each answer the page shows what each signal says on its own, then the combined reading:
+- **Words only**, **Voice only** and **Face only**: separate comparison models, one signal each.
+- **B · Words + voice**: the headline model. It also reads the participant's previous line. The face is shown but not used.
+- **Compare with A** (switch, or open the page with `?compare`): adds the deployed model **A**, which reads only the current line.
 
-The face-only model runs in shadow, and speech that overlaps the robot's voice is ignored.
+A one-line readout says where the signals agree or differ. Both models and all three signals
+are logged for every answer, whatever is shown. Speech that overlaps the robot's voice is ignored.
 
 ```bash
 brew install portaudio           # needed to build pyaudio (microphone capture)
@@ -67,7 +69,7 @@ Useful flags:
 - `--deployed-asr`: the Whisper settings of the Session 4 evaluation. The default decodes faster.
 - `--replay-dialog Ses04F_impro05 --speaker F --silent-robot`: replay a recorded scene instead of the devices. Needs IEMOCAP.
 
-The demo needs three checkpoints that are **not in git**, because they are trained
+The demo needs these model files, which are **not in git** because they are trained
 on licensed IEMOCAP data. Get them from the project team, or rebuild them with
 IEMOCAP access:
 
@@ -76,9 +78,14 @@ IEMOCAP access:
 | `models/mvp/audio_text_baseline.pt` | A | `src/train_mvp_baseline.py` (`configs/mvp_day3_baseline.json`) |
 | `models/mvp/context_baseline.pt` | B | `src/train_mvp_context.py` (`configs/mvp_context.json`) |
 | `models/mvp/visual_day5/deployment.pt` | Face head | `src/train_mvp_visual.py`, then `src/select_deployment_fusion.py` |
+| `models/mvp/controls/{text,audio}_{42,43,44}.pt` | Words-only and voice-only rows (6 files) | `src/benchmark_controls.py`, then copy its `text_*` and `audio_*` heads here |
 
 Copy the files byte-for-byte: the face head checks A's checksum. A rebuilt A
-needs a rebuilt face head; otherwise run with `--no-camera`.
+needs a rebuilt face head; otherwise run with `--no-camera`. Without the six control files
+the demo still runs, and the words-only and voice-only rows stay hidden.
+
+Start the demo from a terminal app. macOS grants camera access per app and asks the first
+time; a process launched by an IDE or background tool may be refused the camera silently.
 
 Sessions are recorded only after consent, to `data/processed/hri_sessions/`
 (gitignored). Each holds an event log, one WAV per response, the model outputs
