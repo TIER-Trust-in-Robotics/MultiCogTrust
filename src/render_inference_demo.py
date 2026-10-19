@@ -231,11 +231,14 @@ V2_ROWS = [
     ("audio", "Voice only", "tone of voice alone, first 6 s"),
     ("face", "Face only", "expression alone · not used by B"),
     ("context", "B · Words + voice", "also reads the previous line"),
+    ("context_with_face", "B + face", "B + 25% face · not shipped"),
 ]
-V2_LANES = [("text", "Words"), ("audio", "Voice"), ("face", "Face"), ("context", "B"), ("label", "Annot.")]
+V2_LANES = [("text", "Words"), ("audio", "Voice"), ("face", "Face"), ("context", "B"),
+            ("context_with_face", "B + face"), ("label", "Annot.")]
 # Macro F1 on all 1,031 scored Session 4 lines, Whisper tiny.en with the live demo's settings
 # (src/final_eval.py dry run for B; the words-only and voice-only controls on the same transcripts).
-V2_SUMMARY = {"b": 0.725, "words": 0.605, "voice": 0.619, "face": 0.383}
+# "B + face" mixes the face head into B at selected.pt's weight (0.25, chosen for A): 19 fixes, 11 breaks.
+V2_SUMMARY = {"b": 0.725, "b_face": 0.731, "words": 0.605, "voice": 0.619, "face": 0.383}
 
 LABELS = ["anger", "happiness", "sadness", "neutral"]
 SHORT = ["ANG", "HAP", "SAD", "NEU"]
@@ -581,6 +584,26 @@ def run_context_inference(rows, inference, device, metadata_path, live_asr=False
     return inference
 
 
+def add_context_with_face(inference):
+    """B mixed with the face head by the rule and weight of selected.pt (A's face mixture); B alone when no face."""
+    import torch
+
+    from src.models.visual_temporal import fuse_probabilities
+
+    alpha = torch.load(VISUAL_DIR / "selected.pt", map_location="cpu", weights_only=False)["alpha"]
+    for u in inference["utterances"]:
+        b = (u.get("context_model") or {}).get("probabilities")
+        if b is None:
+            u["context_with_face"] = None
+            continue
+        face = u.get("face")
+        visual = torch.tensor([face if face is not None else b], dtype=torch.float32)
+        u["context_with_face"] = fuse_probabilities(torch.tensor([b], dtype=torch.float32), visual,
+                                                    torch.tensor([face is not None]), alpha)[0].tolist()
+    inference["context_with_face_weight"] = alpha
+    return inference
+
+
 def wrap(draw, text, fnt, width):
     lines, current = [], []
     for word in text.split():
@@ -608,6 +631,8 @@ def modality_probabilities(u, key):
         values = u["controls"][key]
     elif key == "context":
         values = (u.get("context_model") or {}).get("probabilities")
+    elif key == "context_with_face":
+        values = u.get("context_with_face")
     else:
         values = u.get({"fused": "probabilities"}.get(key, key))
     return None if values is None else np.array(values)
@@ -652,7 +677,10 @@ def multimodal_readout(vectors):
         line = f"The words carry {b}; the voice alone reads {voice}."
     else:
         line = f"The words read {words} and the voice {voice}; combined, B reads {b}."
-    if face is not None:
+    with_face = None if vectors.get("context_with_face") is None else LABELS[int(np.argmax(vectors["context_with_face"]))]
+    if with_face is not None and with_face != b:
+        line += f" Adding the face turns B's {b} into {with_face}."
+    elif face is not None:
         line += " The face agrees." if face == b else f" The face alone reads {face}."
     return line
 
@@ -688,7 +716,7 @@ class Renderer:
         elif self.view == "multimodal":
             # Each signal alone, a gap, then B.
             self.signal_rows = V2_ROWS
-            self.row_y = [420 + i * 56 + (14 if i >= 3 else 0) for i in range(len(V2_ROWS))]
+            self.row_y = [410 + i * 54 + (8 if i >= 3 else 0) for i in range(len(V2_ROWS))]
             self.lanes, lane_y0 = V2_LANES, 826
         elif self.view == "compare":
             # Two model rows with a latency line each, then the face reference row.
@@ -779,8 +807,8 @@ class Renderer:
                font=FONTS["footer"], fill=INK3)
 
     def static_multimodal(self, d):
-        d.rounded_rectangle([PANE_X, 372, PANE_R, 764], radius=10, fill=CARD)
-        d.text((PANE_X + 20, 386), "SAME UTTERANCE  ·  EACH SIGNAL ALONE, THEN B", font=FONTS["eyebrow"], fill=INK3)
+        d.rounded_rectangle([PANE_X, 372, PANE_R, 772], radius=10, fill=CARD)
+        d.text((PANE_X + 20, 384), "SAME UTTERANCE  ·  EACH SIGNAL ALONE, THEN B", font=FONTS["eyebrow"], fill=INK3)
         rule_y = (self.row_y[2] + 46 + self.row_y[3]) // 2
         d.line([(PANE_X + 20, rule_y), (PANE_R - 20, rule_y)], fill=RULE, width=1)
         self.static_timeline(d, 780)
@@ -790,9 +818,9 @@ class Renderer:
                font=FONTS["footer"], fill=INK3)
         summary = V2_SUMMARY
         d.text((40, 1050),
-               f"Session 4 macro F1, Whisper ASR with the live demo's settings: B {summary['b']:.3f} · words only "
-               f"{summary['words']:.3f} · voice only {summary['voice']:.3f} · face only {summary['face']:.3f}. "
-               "Timings: CPU, as the live demo runs.",
+               f"Session 4 macro F1, Whisper ASR with the live demo's settings: B {summary['b']:.3f} · B + face "
+               f"{summary['b_face']:.3f} (A's 25% face weight, not shipped) · words only {summary['words']:.3f} · "
+               f"voice only {summary['voice']:.3f} · face only {summary['face']:.3f}. Timings: CPU, as live.",
                font=FONTS["footer"], fill=INK3)
 
     def static_layer(self, name):
@@ -1141,13 +1169,13 @@ class Renderer:
         self.draw_previous_line(d, u.get("context_model") or {}, k)
         if vectors.get("context") is not None:
             for i, line in enumerate(wrap(d, multimodal_readout(vectors), FONTS["body_medium"], PANE_R - PANE_X - 40)[:2]):
-                d.text((x0, 662 + i * 28), " ".join(line), font=FONTS["body_medium"], fill=mix(INK, CARD, k))
-        d.text((x0, 728), "Annotators", font=FONTS["small"], fill=INK3)
+                d.text((x0, 690 + i * 25), " ".join(line), font=FONTS["body_medium"], fill=mix(INK, CARD, k))
+        d.text((x0, 745), "Annotators", font=FONTS["small"], fill=INK3)
         x = x0 + d.textlength("Annotators  ", font=FONTS["small"])
-        d.text((x, 725), annotator_name(u), font=FONTS["label"], fill=INK)
+        d.text((x, 742), annotator_name(u), font=FONTS["label"], fill=INK)
         if u["label"] is None:
             x += d.textlength(annotator_name(u) + "  ", font=FONTS["label"])
-            d.text((x, 728), "·  unscored", font=FONTS["small"], fill=INK3)
+            d.text((x, 745), "·  unscored", font=FONTS["small"], fill=INK3)
 
     def draw_stacks(self, d, t):
         """Each signal alone, the deployed fusion and the face mixture, with a readout."""
@@ -1323,6 +1351,9 @@ def main():
                                         for u in inference["utterances"]):
             print(f"{name}: context model (B) on {len(tracked)} utterances", flush=True)
             inference = run_context_inference(tracked, inference, args.device, args.metadata, live_asr=v2)
+            inference_path.write_text(json.dumps(inference, indent=2))
+        if v2 and any("context_with_face" not in u for u in inference["utterances"]):
+            add_context_with_face(inference)
             inference_path.write_text(json.dumps(inference, indent=2))
         for u in inference["utterances"]:
             parity = u.get("parity")
