@@ -1,0 +1,70 @@
+{
+  "name": "final_eval_session5_v1",
+  "status": "frozen",
+  "frozen_on": "2026-10-19",
+  "decisions": "Headline model B (A is the comparator); headline smoothing none, the live demo default. Chosen before any Session 5 result.",
+  "status_note": "To freeze: fill dry_run_reference from a Session 4 dry run, set this to \"frozen\", commit, and rerun the dry run on that commit (it must pass). Session 5 then runs once. Freezing means no further model, preprocessing or metric changes; nothing is tuned after the run.",
+  "task": "iemocap_emotion_4",
+  "labels": ["anger", "happiness", "sadness", "neutral"],
+  "label_merge": "exc counts as happiness; other IEMOCAP codes are unscored but still give B its previous-line context",
+  "session": 5,
+  "metadata": {
+    "path": "data/processed/iemocap_manifest/metadata.jsonl",
+    "fingerprint_sha256": "d521ffc77bbef1655e040f55086e01b8695395e4b292dd88bb0065a7a8e9c8cf",
+    "fingerprint": "metadata_fingerprint in src/final_eval.py: the fields the evaluation uses, with audio identified by its path inside the IEMOCAP release, so the check passes on any machine. It replaced the whole-file hash (551891a6..., which records absolute paths) on 2026-10-19, before any Session 5 run; the frozen decisions did not change."
+  },
+  "models": {
+    "A": {
+      "checkpoint": "models/mvp/audio_text_baseline.pt",
+      "sha256": "a6781aff2bfea57c0e2c8d3e80e9c434626e7ea73287a5fdb048ae5990df653d",
+      "text_input": "current line"
+    },
+    "B": {
+      "checkpoint": "models/mvp/context_baseline.pt",
+      "sha256": "5672306702260e72cd14f76ef5442e9d33bd52f52cee67f6a5aacb034630fed4",
+      "text_input": "the same speaker's previous Whisper line [SEP] current line"
+    }
+  },
+  "primary_model": "B",
+  "comparator_model": "A",
+  "asr": {
+    "model": "Systran/faster-whisper-tiny.en",
+    "snapshot": "0d3d19a32d3338f10357c0889762bd8d64bbdeba",
+    "model_bin_sha256": "1a5afae06a4db91c975c9a9d78be5cc110ee4ea022ad57d55492e4550e936b2a",
+    "device": "cpu",
+    "compute_type": "int8",
+    "cpu_threads": 4,
+    "language": "en",
+    "beam_size": 1,
+    "options": {"without_timestamps": true, "temperature": 0.0},
+    "note": "The live demo's default (FAST_ASR, 4 threads). Whisper hears the first 6 s of each line, as deployed."
+  },
+  "device": "cpu",
+  "abstention": "An empty transcript gets no prediction and counts as an error in every metric.",
+  "smoothing": {
+    "primary": "none",
+    "secondary": ["balanced", "max_f1"],
+    "scope": "One state per speaker within a dialogue, updated on every line with a prediction, in time order."
+  },
+  "metrics": {
+    "primary": "macro_f1",
+    "secondary": ["uar", "accuracy", "per_class", "confusion", "change_accuracy"],
+    "change_accuracy": "Accuracy on scored lines whose label differs from the same speaker's previous scored line in the dialogue.",
+    "bootstrap": {"unit": "dialogue", "resamples": 2000, "seed": 0, "interval": 0.95}
+  },
+  "subsets": ["improvised", "scripted", "female_speaker", "male_speaker"],
+  "excluded": {
+    "visual": "Face head runs at weight 0 in deployment and Session 5 has no visual cache.",
+    "mosei_test": "Waits for the MOSEI source-identity gate in docs/async_multimodal_pipeline_roadmap.md.",
+    "msp_podcast": "No MSP-Podcast audio is available locally."
+  },
+  "disclosure": "Session 5 is not a pristine holdout: older 11-class experiments (src/iemocap_baseline_training.py) evaluated it and selected epochs on its macro F1. The four-class models evaluated here were developed on Sessions 1-4 only. A's checkpoint epoch was picked on Session 4; B's recipe was chosen out-of-fold on Sessions 1-3.",
+  "dry_run_reference": {
+    "session": 4,
+    "macro_f1": {"A": 0.7298, "B": 0.7250},
+    "tolerance": 0.005,
+    "note": "From the first Session 4 dry run (2026-10-18, commit 83bcd44); they match the earlier live-settings Session 4 results. Later dry runs must reproduce these within the tolerance."
+  },
+  "output_dir": "data/processed/final_eval/session5",
+  "dry_run_dir": "data/processed/final_eval/session4_dryrun"
+}

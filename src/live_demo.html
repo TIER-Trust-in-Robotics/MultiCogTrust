@@ -42,7 +42,7 @@ label{font-size:14px;color:var(--ink2);display:inline-flex;align-items:center;ga
 .head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:6px 0 12px}
 .seg{display:inline-flex;border:1px solid #3a3a37;border-radius:8px;overflow:hidden}.seg button{border:0;border-radius:0;background:transparent;color:var(--ink2);padding:6px 12px;font-size:13px}
 .seg button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
-.row{margin:0 0 14px}.rowtop{display:flex;justify-content:space-between;align-items:baseline;gap:10px}.name{font-size:19px}.name b{font-weight:700}.caption{font-size:13px;color:var(--ink3);margin-left:8px}
+.row{margin:0 0 14px}.row.combined{border-top:1px solid var(--rule);padding-top:12px}.lane.combined{border-top:1px solid var(--rule);padding-top:8px}.rowtop{display:flex;justify-content:space-between;align-items:baseline;gap:10px}.name{font-size:19px}.name b{font-weight:700}.caption{font-size:13px;color:var(--ink3);margin-left:8px}
 .value{font-size:19px;white-space:nowrap}.value b{font-weight:700;text-transform:capitalize}.value code{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:16px;margin-left:6px}
 .bars{display:flex;gap:2px;height:16px;margin-top:6px;background:var(--track);border-radius:4px;overflow:hidden}.bars i{display:block;height:100%;transition:width .35s ease-out}
 .ms{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px;color:var(--ink3);margin-top:4px}.readout{font-size:18px;font-weight:500;margin:4px 0 0;min-height:24px}
@@ -108,7 +108,8 @@ label{font-size:14px;color:var(--ink2);display:inline-flex;align-items:center;ga
       <button id="robot-say" disabled>Robot speaks</button>
       <button id="trial-end" disabled>End trial</button>
     </div>
-    <label><input id="show-models" type="checkbox" checked> Show model output</label>
+    <span class="ops"><label><input id="show-models" type="checkbox" checked> Show model output</label>
+      <label><input id="compare-a" type="checkbox"> Compare with A</label></span>
   </div>
   <p id="probe" class="probe"></p>
 </section>
@@ -150,7 +151,9 @@ label{font-size:14px;color:var(--ink2);display:inline-flex;align-items:center;ga
 </section>
 <footer>
   The robot's lines are spoken by this computer; speech that overlaps them is ignored, so the models only score the participant.
-  <b>A · Deployed</b> reads the current line; <b>B · Context</b> also reads the participant's previous line; <b>Face only</b> runs in shadow.
+  <b>Words only</b>, <b>Voice only</b> and <b>Face only</b> show what each signal says on its own (separate comparison models).
+  <b>B</b> combines words and voice and also reads the participant's previous line; the face is shown but not used by B.
+  <b>Compare with A</b> adds the deployed model, which reads only the current line. Smoothing applies to A and B.
   Sessions save to data/processed/hri_sessions on this machine only: an event log, one WAV per response, model outputs and self-reports.
 </footer>
 </main>
@@ -160,16 +163,22 @@ const LABELS = ["anger", "happiness", "sadness", "neutral"];
 const SHORT = {anger: "ANG", happiness: "HAP", sadness: "SAD", neutral: "NEU"};
 const COLOR = {anger: "var(--ang)", happiness: "var(--hap)", sadness: "var(--sad)", neutral: "var(--neu)"};
 const MUTED = {anger: "#6b2a2e", happiness: "#664a12", sadness: "#26476e", neutral: "#1b5c45"};
+// What each signal says alone, then B's combined reading; A only with "Compare with A".
 const ROWS = [
-  {key: "A", name: "A · Deployed", caption: "current line only"},
-  {key: "B", name: "B · Context", caption: "previous line + current line"},
-  {key: "face", name: "Face only", caption: "shadow, used by neither"},
+  {key: "text", name: "Words only", caption: "what the transcript alone says", modality: true},
+  {key: "audio", name: "Voice only", caption: "tone of voice alone, first 6 s", modality: true},
+  {key: "face", name: "Face only", caption: "expression alone; not used by B"},
+  {key: "B", name: "B · Words + voice", caption: "the model's reading; also reads your previous line", combined: true},
+  {key: "A", name: "A · Words + voice", caption: "this line only", compare: true},
 ];
+let compare = new URLSearchParams(location.search).has("compare"), modalities = true;  // ?compare opens with A shown
+const shown = r => (!r.compare || compare) && (!r.modality || modalities);
 let preset = "off", resetAfter = -Infinity, newestStart = -Infinity, latest = null;
 let scenarios = [], hri = null, feeling = null, trust = null;
 const $ = id => document.getElementById(id);
 $("legend").innerHTML = LABELS.map(l => `<span><i style="background:${COLOR[l]}"></i>${l[0].toUpperCase() + l.slice(1)}</span>`).join("");
-$("rows").innerHTML = ROWS.map(r => `<div class="row" id="row-${r.key}"><div class="rowtop"><span class="name"><b>${r.name}</b><span class="caption">${r.caption}</span></span><span class="value">—</span></div><div class="bars"></div><div class="ms"></div></div>`).join("");
+$("rows").innerHTML = ROWS.map(r => `<div class="row${r.combined ? " combined" : ""}" id="row-${r.key}"><div class="rowtop"><span class="name"><b>${r.name}</b><span class="caption">${r.caption}</span></span><span class="value">—</span></div><div class="bars"></div><div class="ms"></div></div>`).join("");
+ROWS.forEach(r => $("row-" + r.key).hidden = !shown(r));
 
 async function post(path, body = {}) {
   const response = await fetch(path, {method: "POST", headers: {"X-Session": TOKEN, "Content-Type": "application/json"}, body: JSON.stringify(body)});
@@ -184,6 +193,7 @@ function probabilities(item, key) {
   if (key === "face") return item.emotion && item.emotion.visual_probabilities || null;
   const c = item.comparison;
   if (!c) return null;
+  if (key === "text" || key === "audio") return c.modalities ? c.modalities[key] : null;
   return preset === "off" ? c[key].probabilities : c.smoothed[preset][key];
 }
 function renderRow(key, p, ms) {
@@ -200,16 +210,33 @@ function renderLatest() {
   $("transcript").textContent = `“${latest.text}”`;
   const prev = latest.comparison.previous_text;
   $("context").textContent = prev ? `B also reads the previous line: “${prev}”` : "B has no previous line yet, so it reads this one alone.";
-  const a = probabilities(latest, "A"), b = probabilities(latest, "B");
-  renderRow("A", a, latest.comparison.A.emotion_ms);
-  renderRow("B", b, latest.comparison.B.emotion_ms);
-  renderRow("face", probabilities(latest, "face"), null);
-  $("readout").textContent = topLabel(a) === topLabel(b) ? `Both read ${topLabel(a)}.` : `A says ${topLabel(a)}, B says ${topLabel(b)}.`;
+  ROWS.forEach(r => {
+    $("row-" + r.key).hidden = !shown(r);
+    renderRow(r.key, probabilities(latest, r.key), r.key === "A" || r.key === "B" ? latest.comparison[r.key].emotion_ms : null);
+  });
+  $("readout").textContent = readout(latest);
+}
+function readout(item) {
+  const b = probabilities(item, "B");
+  if (!b) return "";
+  const B = topLabel(b), words = probabilities(item, "text"), voice = probabilities(item, "audio"), face = probabilities(item, "face");
+  const parts = [];
+  if (words && voice) {
+    const t = topLabel(words), v = topLabel(voice);
+    if (t === B && v === B) parts.push(`Words and voice agree: ${B}.`);
+    else if (t === v) parts.push(`Words and voice each read ${t}; with your previous line, B reads ${B}.`);
+    else if (v === B) parts.push(`The words alone read ${t}; the voice carries ${B}.`);
+    else if (t === B) parts.push(`The words carry ${B}; the voice alone reads ${v}.`);
+    else parts.push(`The words read ${t} and the voice ${v}; combined, B reads ${B}.`);
+  } else parts.push(`B reads ${B}.`);
+  if (face) parts.push(topLabel(face) === B ? "The face agrees." : `The face alone reads ${topLabel(face)}.`);
+  if (compare) { const A = topLabel(probabilities(item, "A")); parts.push(A === B ? "A agrees." : `A, reading only this line, says ${A}.`); }
+  return parts.join(" ");
 }
 function renderLanes(items) {
   if (!items.length) { $("lanes").innerHTML = `<p class="empty">Predictions appear here after each response.</p>`; return; }
   items = items.slice().reverse();
-  $("lanes").innerHTML = ROWS.map(r => `<div class="lane"><span>${r.name}</span><div class="blocks">${items.map(h => {
+  $("lanes").innerHTML = ROWS.filter(shown).map(r => `<div class="lane${r.combined ? " combined" : ""}"><span>${r.name.split(" · ")[0]}</span><div class="blocks">${items.map(h => {
     const p = probabilities(h, r.key);
     if (!p) return `<div class="none">—</div>`;
     const t = topLabel(p);
@@ -292,6 +319,8 @@ $("report-save").onclick = async () => {
     document.querySelectorAll("#report button[aria-pressed]").forEach(b => b.setAttribute("aria-pressed", "false"));
   }
 };
+$("compare-a").checked = compare;
+$("compare-a").onchange = () => { compare = $("compare-a").checked; ROWS.forEach(r => $("row-" + r.key).hidden = !shown(r)); renderLatest(); };
 $("show-models").onchange = () => document.querySelectorAll(".modelview").forEach(el => el.classList.toggle("off", !$("show-models").checked));
 document.querySelectorAll(".seg button").forEach(b => b.onclick = () => {
   preset = b.dataset.preset;
@@ -314,6 +343,7 @@ async function poll() {
       $("source").textContent = `Source: ${state.demo.source}`;
       if (!state.demo.face) $("noframe").textContent = "Camera off (--no-camera): audio and text only";
       if (state.demo.scenarios && !scenarios.length) loadScenarios(state.demo.scenarios);
+      if (state.demo.modalities === false && modalities) { modalities = false; ROWS.forEach(r => $("row-" + r.key).hidden = !shown(r)); }
     }
     const v = state.vision;
     $("face").textContent = !state.demo || !state.demo.face ? "Face model: off" : v ? `Face model: ${v.status.replaceAll("_", " ")} · ${v.processing_ms.toFixed(0)} ms/frame` : "Face model: waiting";

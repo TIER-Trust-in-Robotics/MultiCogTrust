@@ -9,6 +9,106 @@ the visual branch is computed and displayed separately. Trust
 prediction remains a later research task requiring trust-specific supervision;
 the runtime does not turn emotion probabilities into a trust score.
 
+## Running the live HRI demo
+
+`src/live_demo.py` runs a scripted human–robot interaction session in the browser. A robot
+reads short scenario lines aloud, the participant answers naturally, and the page shows how
+the models read each answer:
+
+- **Words only**, **Voice only** and **Face only**: what each signal says on its own (separate comparison models).
+- **B · Words + voice**: the headline model, which also reads the participant's previous line. The face is shown but not used.
+- **Compare with A** (a switch, or `?compare` in the URL): adds the deployed model A, which reads only the current line.
+
+A one-line readout says where the signals agree or differ. Both models and all three signals
+are logged for every answer, whatever is shown. Speech that overlaps the robot's voice is ignored.
+
+### 1. Install
+
+Install [uv](https://docs.astral.sh/uv/) and Git first. On macOS, in Terminal:
+
+```bash
+brew install portaudio           # microphone capture (PyAudio)
+git clone https://github.com/TIER-Trust-in-Robotics/MultiCogTrust.git
+cd MultiCogTrust
+uv sync --locked
+```
+
+On Windows, in PowerShell (not yet run on a Windows machine, so please report problems):
+
+```powershell
+winget install Git.Git
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"   # then open a new terminal
+git clone https://github.com/TIER-Trust-in-Robotics/MultiCogTrust.git
+cd MultiCogTrust
+uv sync --locked                 # installs Python 3.11 and every package; no PortAudio step
+```
+
+### 2. Add the model files
+
+The model files are **not in git** because they are trained on licensed IEMOCAP data. Copy the
+`models/` folder from the lab's shared drive into the repo root (9 files, about 49 MB), or rebuild
+them with IEMOCAP access:
+
+| Path | Used for | Needed? | Rebuild |
+|---|---|---|---|
+| `models/mvp/audio_text_baseline.pt` | A | Yes | `src/train_mvp_baseline.py` (`configs/mvp_day3_baseline.json`) |
+| `models/mvp/context_baseline.pt` | B | Yes | `src/train_mvp_context.py` (`configs/mvp_context.json`) |
+| `models/mvp/visual_day5/deployment.pt` | Face only | Without it, run with `--no-camera` | `src/train_mvp_visual.py`, then `src/select_deployment_fusion.py` |
+| `models/mvp/controls/{text,audio}_{42,43,44}.pt` | Words only, Voice only (6 files) | Without them, those rows stay hidden | `src/benchmark_controls.py`, then copy its `text_*` and `audio_*` heads here |
+
+Copy the files byte-for-byte: the face head checks A's checksum, so a rebuilt A needs a rebuilt
+face head. To check the copies, put the drive's `SHA256SUMS` in the repo root and run
+`shasum -a 256 -c SHA256SUMS` on macOS (every line should say OK). In PowerShell, run
+`Get-Content SHA256SUMS | % { $h, $f = $_ -split '\s+', 2; "$((Get-FileHash $f).Hash -eq $h.ToUpper()) $f" }`
+(every line should start with True).
+
+### 3. Start the demo
+
+```bash
+uv run python src/live_demo.py
+```
+
+- The first run needs internet: it downloads DistilBERT, DistilHuBERT, Whisper tiny.en and MobileNetV3 (about 1 GB). Later runs can add `--offline`.
+- The page opens at `http://127.0.0.1:8765`. Allow microphone and camera access when asked.
+- Start it from a terminal app. macOS grants camera access per app and asks the first time; a process launched by an IDE or background tool may be refused the camera silently. On Windows, allow desktop apps to use the camera and microphone under Settings → Privacy & security.
+
+### 4. Run a session
+
+1. **To record (optional):** enter a participant ID, tick the consent box and click **Start recording session**. Without a session, nothing is saved.
+2. Pick a scenario and click **Start trial**. The setting appears on screen.
+3. Click **Robot speaks line 1 of N**. When the robot finishes, the participant answers. Repeat for each line until the button reads **Robot has finished**.
+4. Click **End trial**. The participant then fills in the self-report: how they felt, trust in the robot from 1 to 7, and an optional note. Click **Save answers**.
+5. Pick the next scenario, or click **End session**. **Stop** (or Ctrl+C in the terminal) ends the demo.
+
+**Show model output** hides the model panels, for example while the participant is looking at the
+screen. The smoothing buttons (No smoothing, Balanced, Max F1) blend each answer with the
+speaker's earlier ones; they apply to A and B only.
+
+Recorded sessions go to `data/processed/hri_sessions/<time>_<participant>/` (gitignored). Each holds
+an event log, one WAV file per answer, every model's output and the self-reports.
+
+### Options
+
+| Flag | Effect |
+|---|---|
+| `--no-camera` | Audio and text only; no face model |
+| `--robot-voice NAME`, `--robot-rate WPM` | Robot voice and speed. Defaults: Samantha on macOS, the system voice on Windows, 170 words per minute |
+| `--silent-robot` | Time the robot's lines without playing them |
+| `--camera-index N`, `--microphone-index N` | Choose devices when there are several |
+| `--threshold X` | Voice-activity threshold between 0 and 1 (default 0.4) |
+| `--deployed-asr` | Whisper settings of the Session 4 evaluation; the default decodes faster |
+| `--replay-dialog Ses04F_impro05 --speaker F --silent-robot` | Replay a recorded IEMOCAP scene instead of the devices. Needs IEMOCAP in `data/IEMOCAP_full_release/`, then `uv run python src/prepare_iemocap.py` |
+| `--output FILE.jsonl` | Also write every raw result, including timings, to a file |
+| `--offline`, `--port N`, `--no-browser`, `--device cpu\|mps` | Cached models only; another port; don't open a browser; where the emotion models run (CPU keeps latency steady) |
+
+### Troubleshooting
+
+- **The camera stays blank.** Allow camera access for your terminal app (see step 3) and restart. If there are several cameras, try `--camera-index 1`.
+- **"Voice … is not installed".** The message lists the installed voices; pick one with `--robot-voice`.
+- **No Words only or Voice only rows.** The six control files are missing from `models/mvp/controls/`.
+- **The port is in use.** Run with `--port 8766` and open that port instead.
+- **Linux.** There is no robot voice yet; its lines are shown and timed but not spoken.
+
 ## Environment
 
 Python 3.11 or newer, managed with [uv](https://docs.astral.sh/uv/):
@@ -27,7 +127,7 @@ quality, comparable baselines and dataset integrity. The
 [MOSEI benchmark audit](docs/mosei_benchmark.md) documents the second dataset,
 continuous sentiment metrics and the historical checkpoint replay.
 
-To launch the current local demo with existing checkpoints:
+To launch the processing inspector, a developer view of the pipeline, with existing checkpoints:
 
 ```bash
 uv run python src/pipeline_demo.py --device mps --offline \
@@ -39,50 +139,6 @@ Open `http://127.0.0.1:8765`. Camera and microphone access must already be
 available. The Stop button ends capture; `--duration` provides a bounded run.
 For repeatable recorded input, add `--replay-dialog Ses01F_impro01 --speaker F`.
 Licensed IEMOCAP data and locally generated checkpoints are not bundled.
-
-### HRI session demo
-
-`src/live_demo.py` runs a scripted human–robot interaction session. A robot avatar
-speaks short scenario lines (macOS `say`), the participant answers naturally, and
-two audio/text emotion models score each answer side by side:
-- **A** is the deployed checkpoint (current line only).
-- **B** is the same architecture retrained to also read the speaker's previous line.
-
-The face-only model runs in shadow, and speech that overlaps the robot's voice is ignored.
-
-```bash
-brew install portaudio           # needed to build pyaudio (microphone capture)
-uv sync --locked
-uv run python src/live_demo.py   # first run online; later runs can add --offline
-```
-
-The first online run downloads DistilBERT, DistilHuBERT, Whisper tiny.en and
-MobileNetV3. Open `http://127.0.0.1:8765` and allow microphone and camera access.
-Then enter a participant ID, confirm consent and start trials. Scenarios live in
-`src/hri_scenarios.json`.
-
-Useful flags:
-- `--no-camera`: audio and text only.
-- `--robot-voice Fred`: a different robot voice.
-- `--deployed-asr`: the Whisper settings of the Session 4 evaluation. The default decodes faster.
-- `--replay-dialog Ses04F_impro05 --speaker F --silent-robot`: replay a recorded scene instead of the devices. Needs IEMOCAP.
-
-The demo needs three checkpoints that are **not in git**, because they are trained
-on licensed IEMOCAP data. Get them from the project team, or rebuild them with
-IEMOCAP access:
-
-| Path | Model | Rebuild |
-|---|---|---|
-| `models/mvp/audio_text_baseline.pt` | A | `src/train_mvp_baseline.py` (`configs/mvp_day3_baseline.json`) |
-| `models/mvp/context_baseline.pt` | B | `src/train_mvp_context.py` (`configs/mvp_context.json`) |
-| `models/mvp/visual_day5/deployment.pt` | Face head | `src/train_mvp_visual.py`, then `src/select_deployment_fusion.py` |
-
-Copy the files byte-for-byte: the face head checks A's checksum. A rebuilt A
-needs a rebuilt face head; otherwise run with `--no-camera`.
-
-Sessions are recorded only after consent, to `data/processed/hri_sessions/`
-(gitignored). Each holds an event log, one WAV per response, the model outputs
-and the self-reports. The demo is macOS-only for now because the robot voice uses `say`.
 
 ## Days 1–2: restore and verify the inference foundation
 

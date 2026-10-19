@@ -162,3 +162,68 @@ def test_without_a_session_nothing_is_written(tmp_path):
     assert "recording" in result and result["recording"] is None
     assert study.state["awaiting_report"] is None
     assert list(tmp_path.iterdir()) == []
+
+
+class FakeShared:
+    """Stands in for SharedEncoders: both models plus the single-signal readings."""
+
+    def __init__(self, a, b):
+        self.a, self.b, self.controls_seen = a, b, []
+
+    def predict(self, text_a, text_b, audio, sample_rate, controls=None):
+        self.controls_seen.append(controls)
+        out = {"A": (self.a.predict(text_a, audio, sample_rate), 5.0), "B": (self.b.predict(text_b, audio, sample_rate), 6.0)}
+        if controls is not None:
+            out["modalities"] = (controls.predict(None), 0.3)
+        return out
+
+
+class FakeControls:
+    def predict(self, pooled):
+        return {"text": {"anger": 0.1, "happiness": 0.1, "sadness": 0.1, "neutral": 0.7},
+                "audio": {"anger": 0.8, "happiness": 0.1, "sadness": 0.05, "neutral": 0.05}}
+
+
+def test_each_signal_is_reported_beside_the_combined_models():
+    a, b = models()
+    processor = ComparisonProcessor(None, a, b, shared=FakeShared(a, b), controls=FakeControls())
+    comparison = run(processor, "Fine.")["comparison"]
+    assert comparison["modalities"]["text"]["neutral"] == 0.7 and comparison["modalities"]["audio"]["anger"] == 0.8
+    assert comparison["modalities"]["ms"] == 0.3 and set(comparison) >= {"A", "B", "smoothed"}
+    without = ComparisonProcessor(None, a, b, shared=FakeShared(a, b))  # controls not installed
+    assert "modalities" not in run(without, "Fine.")["comparison"]
+
+
+def test_missing_control_files_hide_the_rows_instead_of_failing(tmp_path):
+    from src.modality_controls import ModalityControls, files
+
+    assert ModalityControls.load(tmp_path) is None
+    assert len(files(tmp_path)) == 6
+
+
+def test_robot_voice_follows_the_platform():
+    from src.live_demo import SAPI_SCRIPT, speech_engine
+
+    assert (speech_engine("darwin"), speech_engine("win32"), speech_engine("linux")) == ("say", "sapi", None)
+    args, stdin, env = Robot(platform="darwin").command("Hello.")
+    assert args == ["say", "-v", "Samantha", "-r", "170", "Hello."] and stdin is None
+    args, stdin, env = Robot("Microsoft Zira Desktop", 220, platform="win32").command("Café, s'il vous plaît.", "out.wav")
+    assert args[0] == "powershell" and args[-1] == SAPI_SCRIPT
+    assert stdin == "Café, s'il vous plaît." and env == {"ROBOT_VOICE": "Microsoft Zira Desktop", "ROBOT_RATE": "2", "ROBOT_WAV": "out.wav"}
+    assert Robot(platform="win32").command("Hi.")[2]["ROBOT_VOICE"] == ""  # system default voice
+
+
+def test_robot_without_a_speech_engine_is_timed_silently(monkeypatch):
+    import time as clock
+
+    robot = Robot(platform="linux")
+    assert robot.engine is None and robot.silent
+    assert robot.duration("one two three four five six seven eight nine ten") == pytest.approx(60 * 10 / 170)
+    monkeypatch.setattr(robot, "duration", lambda text: 0.05)
+    done = []
+    robot.speak("Hello there.", on_done=lambda start, end: done.append(end - start))
+    for _ in range(100):
+        if done:
+            break
+        clock.sleep(0.01)
+    assert done and done[0] >= 0.05 and robot.overlaps(*robot.windows[0])
