@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 from collections import deque
 from dataclasses import dataclass
-import resource
 import sys
 import time
 
@@ -37,6 +36,17 @@ def distribution(values):
         if values
         else {"count": 0}
     )
+
+
+def peak_rss_mib():
+    """Peak resident memory of this process (Windows has no resource module)."""
+    if sys.platform == "win32":
+        import psutil
+
+        return psutil.Process().memory_info().peak_wset / 1024**2
+    import resource
+
+    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (1024**2 if sys.platform == "darwin" else 1024)
 
 
 async def run_stream(
@@ -396,8 +406,7 @@ async def run_stream(
         "elapsed_sec": time.monotonic() - origin,
         "response_latency": distribution(metrics["response_ms"]),
         "visual_latency": distribution(metrics["visual_ms"]),
-        "peak_process_rss_mib": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-        / (1024**2 if sys.platform == "darwin" else 1024),
+        "peak_process_rss_mib": peak_rss_mib(),
     }
     report.pop("response_ms")
     report.pop("visual_ms")

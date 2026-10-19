@@ -199,3 +199,31 @@ def test_missing_control_files_hide_the_rows_instead_of_failing(tmp_path):
 
     assert ModalityControls.load(tmp_path) is None
     assert len(files(tmp_path)) == 6
+
+
+def test_robot_voice_follows_the_platform():
+    from src.live_demo import SAPI_SCRIPT, speech_engine
+
+    assert (speech_engine("darwin"), speech_engine("win32"), speech_engine("linux")) == ("say", "sapi", None)
+    args, stdin, env = Robot(platform="darwin").command("Hello.")
+    assert args == ["say", "-v", "Samantha", "-r", "170", "Hello."] and stdin is None
+    args, stdin, env = Robot("Microsoft Zira Desktop", 220, platform="win32").command("Café, s'il vous plaît.", "out.wav")
+    assert args[0] == "powershell" and args[-1] == SAPI_SCRIPT
+    assert stdin == "Café, s'il vous plaît." and env == {"ROBOT_VOICE": "Microsoft Zira Desktop", "ROBOT_RATE": "2", "ROBOT_WAV": "out.wav"}
+    assert Robot(platform="win32").command("Hi.")[2]["ROBOT_VOICE"] == ""  # system default voice
+
+
+def test_robot_without_a_speech_engine_is_timed_silently(monkeypatch):
+    import time as clock
+
+    robot = Robot(platform="linux")
+    assert robot.engine is None and robot.silent
+    assert robot.duration("one two three four five six seven eight nine ten") == pytest.approx(60 * 10 / 170)
+    monkeypatch.setattr(robot, "duration", lambda text: 0.05)
+    done = []
+    robot.speak("Hello there.", on_done=lambda start, end: done.append(end - start))
+    for _ in range(100):
+        if done:
+            break
+        clock.sleep(0.01)
+    assert done and done[0] >= 0.05 and robot.overlaps(*robot.windows[0])

@@ -43,7 +43,7 @@ Licensed IEMOCAP data and locally generated checkpoints are not bundled.
 ### HRI session demo
 
 `src/live_demo.py` runs a scripted human–robot interaction session. A robot avatar
-speaks short scenario lines (macOS `say`), and the participant answers naturally.
+speaks short scenario lines (macOS `say` or the Windows speech engine), and the participant answers naturally.
 For each answer the page shows what each signal says on its own, then the combined reading:
 - **Words only**, **Voice only** and **Face only**: separate comparison models, one signal each.
 - **B · Words + voice**: the headline model. It also reads the participant's previous line. The face is shown but not used.
@@ -52,11 +52,26 @@ For each answer the page shows what each signal says on its own, then the combin
 A one-line readout says where the signals agree or differ. Both models and all three signals
 are logged for every answer, whatever is shown. Speech that overlaps the robot's voice is ignored.
 
+macOS:
+
 ```bash
 brew install portaudio           # needed to build pyaudio (microphone capture)
 uv sync --locked
 uv run python src/live_demo.py   # first run online; later runs can add --offline
 ```
+
+Windows (PowerShell; not yet run on a Windows machine, so please report problems):
+
+```powershell
+winget install Git.Git
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"   # then open a new terminal
+git clone https://github.com/TIER-Trust-in-Robotics/MultiCogTrust.git
+cd MultiCogTrust
+uv sync --locked                 # installs Python 3.11 and every package; no PortAudio step
+uv run python src/live_demo.py   # the robot uses the system voice; --robot-voice picks another
+```
+
+On Windows, allow desktop apps to use the camera and microphone under Settings → Privacy & security.
 
 The first online run downloads DistilBERT, DistilHuBERT, Whisper tiny.en and
 MobileNetV3. Open `http://127.0.0.1:8765` and allow microphone and camera access.
@@ -80,7 +95,10 @@ IEMOCAP access:
 | `models/mvp/visual_day5/deployment.pt` | Face head | `src/train_mvp_visual.py`, then `src/select_deployment_fusion.py` |
 | `models/mvp/controls/{text,audio}_{42,43,44}.pt` | Words-only and voice-only rows (6 files) | `src/benchmark_controls.py`, then copy its `text_*` and `audio_*` heads here |
 
-Copy the files byte-for-byte: the face head checks A's checksum. A rebuilt A
+Copy the files byte-for-byte: the face head checks A's checksum. With the drive's `SHA256SUMS` in the repo root,
+`shasum -a 256 -c SHA256SUMS` checks them on macOS; in PowerShell use
+`Get-Content SHA256SUMS | % { $h, $f = $_ -split '\s+', 2; "$((Get-FileHash $f).Hash -eq $h.ToUpper()) $f" }`
+(every line should start with True). A rebuilt A
 needs a rebuilt face head; otherwise run with `--no-camera`. Without the six control files
 the demo still runs, and the words-only and voice-only rows stay hidden.
 
@@ -89,7 +107,7 @@ time; a process launched by an IDE or background tool may be refused the camera 
 
 Sessions are recorded only after consent, to `data/processed/hri_sessions/`
 (gitignored). Each holds an event log, one WAV per response, the model outputs
-and the self-reports. The demo is macOS-only for now because the robot voice uses `say`.
+and the self-reports. On Linux there is no robot voice yet: lines are shown and timed but not spoken.
 
 ## Days 1–2: restore and verify the inference foundation
 

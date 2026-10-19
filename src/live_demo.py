@@ -7,7 +7,7 @@ utterance and both models score it; the face-only model runs in shadow (weight 0
 deployed). Every context-smoothing preset is computed so the page switches instantly.
 
 Scenarios (hri_scenarios.json) give the participant a short setting. The robot's scripted
-lines are spoken with macOS text-to-speech, and speech overlapping the robot is ignored so
+lines are spoken with the system's text-to-speech (macOS `say`, Windows speech), and speech overlapping the robot is ignored so
 the models never score the robot. Once a participant ID is entered and consent confirmed,
 each trial records the robot's lines, the participant's utterance audio (16 kHz WAV),
 transcripts, model outputs and a post-trial self-report under data/processed/hri_sessions/
@@ -16,7 +16,8 @@ transcripts, model outputs and a post-trial self-report under data/processed/hri
     uv run python src/live_demo.py --offline
     uv run python src/live_demo.py --offline --replay-dialog Ses04F_impro05 --speaker F --silent-robot
 
-macOS asks the terminal for microphone and camera access on first use.
+macOS asks the terminal for microphone and camera access on first use; on Windows, allow
+desktop apps to use the camera and microphone under Settings > Privacy & security.
 """
 
 from __future__ import annotations
@@ -61,11 +62,46 @@ def now_iso():
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
 
 
-class Robot:
-    """Speaks scripted lines with macOS `say` and remembers when, so its echo is ignored."""
+# Windows speech through its built-in engine (System.Speech): the text arrives on stdin as UTF-8
+# and the voice and output file through environment variables, so nothing is quoted into the script.
+SAPI_SCRIPT = (
+    "[Console]::InputEncoding = [Text.Encoding]::UTF8; Add-Type -AssemblyName System.Speech; "
+    "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+    "if ($env:ROBOT_VOICE) { $s.SelectVoice($env:ROBOT_VOICE) }; $s.Rate = [int]$env:ROBOT_RATE; "
+    "if ($env:ROBOT_WAV) { $s.SetOutputToWaveFile($env:ROBOT_WAV) }; $s.Speak([Console]::In.ReadToEnd())"
+)
+SAPI_VOICES = ("Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer)"
+               ".GetInstalledVoices() | ForEach-Object { $_.VoiceInfo.Name }")
 
-    def __init__(self, voice="Samantha", rate=170, silent=False):
-        self.voice, self.rate, self.silent = voice, rate, silent
+
+def speech_engine(platform=sys.platform):
+    """"say" on macOS, "sapi" on Windows, None where the robot can only be timed, not heard."""
+    return {"darwin": "say", "win32": "sapi"}.get(platform)
+
+
+def installed_voices(engine):
+    if engine == "say":
+        listing = subprocess.run(["say", "-v", "?"], capture_output=True, text=True).stdout
+        return [re.split(r"\s{2,}", line.strip())[0] for line in listing.splitlines() if line.strip()]
+    if engine == "sapi":
+        listing = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", SAPI_VOICES],
+                                 capture_output=True, text=True).stdout
+        return [line.strip() for line in listing.splitlines() if line.strip()]
+    return []
+
+
+class Robot:
+    """Speaks scripted lines and remembers when, so its echo is ignored.
+
+    macOS uses `say` and Windows its built-in speech engine; voice=None takes the system default
+    (Samantha on macOS). Without an engine the robot is silent, and each line lasts as long as it
+    would take to say at the given rate.
+    """
+
+    def __init__(self, voice=None, rate=170, silent=False, platform=sys.platform):
+        self.engine = speech_engine(platform)
+        self.voice = voice or ("Samantha" if self.engine == "say" else None)
+        self.rate, self.silent = rate, silent or self.engine is None
         self.lock = threading.Lock()
         self.windows = []  # (start, end) in monotonic seconds, the clock of live audio
         self.speaking_since = None
@@ -75,6 +111,32 @@ class Robot:
     def speaking(self):
         return self.speaking_since is not None
 
+    def command(self, text, output=None):
+        """The subprocess call (args, stdin, extra environment) that speaks or renders one line."""
+        if self.engine == "say":
+            args = ["say", *(["-v", self.voice] if self.voice else []), "-r", str(self.rate)]
+            return [*args, *(["-o", str(output)] if output else []), text], None, {}
+        # SAPI's Rate runs -10..10 around a default of roughly 180 words per minute.
+        env = {"ROBOT_VOICE": self.voice or "", "ROBOT_RATE": str(max(-10, min(10, round((self.rate - 180) / 20)))),
+               "ROBOT_WAV": str(output) if output else ""}
+        return ["powershell", "-NoProfile", "-NonInteractive", "-Command", SAPI_SCRIPT], text, env
+
+    def duration(self, text):
+        """Seconds a silent line takes: rendered to a file when an engine exists, else from its length."""
+        if self.engine is None:
+            return max(0.8, 60 * len(text.split()) / self.rate)
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / ("line.aiff" if self.engine == "say" else "line.wav")
+            self.run(*self.command(text, path))
+            return sf.info(str(path)).duration
+
+    @staticmethod
+    def run(args, stdin, env):
+        import os
+
+        subprocess.run(args, input=stdin.encode("utf-8") if stdin is not None else None,
+                       env={**os.environ, **env}, check=True)
+
     def speak(self, text, on_done=None):
         with self.lock:
             if self.speaking_since is not None:
@@ -82,14 +144,10 @@ class Robot:
             self.speaking_since, self.line = time.monotonic(), text
 
         def run():
-            command = ["say", "-v", self.voice, "-r", str(self.rate)]
-            if self.silent:  # synthesize without playback, then take as long as playback would
-                with tempfile.TemporaryDirectory() as folder:
-                    path = Path(folder) / "line.aiff"
-                    subprocess.run([*command, "-o", str(path), text], check=True)
-                    time.sleep(sf.info(str(path)).duration)
+            if self.silent:  # take as long as playback would, without sound
+                time.sleep(self.duration(text))
             else:
-                subprocess.run([*command, text], check=True)
+                self.run(*self.command(text))
             with self.lock:
                 started, ended = self.speaking_since, time.monotonic()
                 self.windows.append((started, ended))
@@ -402,7 +460,7 @@ def parse_args(argv=None):
     parser.add_argument("--no-camera", action="store_true", help="Audio only; no face model")
     parser.add_argument("--microphone-index", type=int)
     parser.add_argument("--threshold", type=float, default=0.4, help="VAD threshold")
-    parser.add_argument("--robot-voice", default="Samantha", help="macOS `say` voice for the robot")
+    parser.add_argument("--robot-voice", help="Robot voice (default Samantha on macOS, the system voice on Windows)")
     parser.add_argument("--robot-rate", type=int, default=170, help="Robot speaking rate, words per minute")
     parser.add_argument("--silent-robot", action="store_true", help="Time robot lines without playing them")
     parser.add_argument("--deployed-asr", action="store_true",
@@ -431,9 +489,12 @@ def main(argv=None):
     from src.visual_fusion import VisualFusionPredictor
     from src.visual_stream import VisualExtractor
 
-    voices = subprocess.run(["say", "-v", "?"], capture_output=True, text=True).stdout
-    if not re.search(rf"^{re.escape(args.robot_voice)}\s", voices, re.MULTILINE):
-        raise SystemExit(f"Voice {args.robot_voice!r} is not installed; see `say -v '?'`")
+    engine = speech_engine()
+    if engine is None and not args.silent_robot:
+        print("No speech engine on this platform: the robot's lines are shown and timed, not spoken.")
+    voice = args.robot_voice or ("Samantha" if engine == "say" else None)
+    if voice and engine and voice not in installed_voices(engine):
+        raise SystemExit(f"Voice {voice!r} is not installed. Installed: {', '.join(installed_voices(engine))}")
     torch.set_num_threads(2)
     model_a = CrossModalEmotionPredictor(A_CHECKPOINT, args.device, args.offline)
     model_b = CrossModalEmotionPredictor(B_CHECKPOINT, args.device, args.offline)
@@ -462,7 +523,7 @@ def main(argv=None):
         "scenarios_file": SCENARIOS.name, "scenarios_sha256": sha256(SCENARIOS),
         "models": {name: {"path": str(path.relative_to(ROOT)), "sha256": sha256(path)}
                    for name, path in (("A", A_CHECKPOINT), ("B", B_CHECKPOINT), ("face", VISUAL_CHECKPOINT))},
-        "robot_voice": args.robot_voice, "robot_rate": args.robot_rate,
+        "robot_voice": robot.voice, "robot_engine": robot.engine, "robot_rate": args.robot_rate,
         "source": f"replay {args.replay_dialog} ({args.speaker})" if source else "microphone + camera",
         "audio": "16 kHz mono WAV per detected utterance during trials; robot-overlapping speech is not saved",
     })
