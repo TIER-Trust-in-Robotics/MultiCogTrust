@@ -22,9 +22,11 @@ from __future__ import annotations
 
 import argparse
 from collections import defaultdict
+import hashlib
 import json
 from pathlib import Path
 import platform
+import re
 import subprocess
 import sys
 import time
@@ -39,6 +41,8 @@ from src.emotion_checkpoint import EMOTION_LABEL_MAP, EMOTION_LABELS
 from src.iemocap_embedding_cache import sha256, write_json
 
 DEFAULT_CONFIG = ROOT / "configs/final_eval_session5.json"
+METADATA_FIELDS = ("utterance_id", "dialog_id", "session", "split", "speaker", "label_code", "text",
+                   "dialog_start_sec", "dialog_end_sec")
 SUBSETS = {
     "improvised": lambda r: "_impro" in r["dialog_id"],
     "scripted": lambda r: "_script" in r["dialog_id"],
@@ -66,13 +70,30 @@ def whisper_dir(config):
     return Path(snapshot_download(asr["model"], revision=asr["snapshot"], local_files_only=True))
 
 
+def metadata_fingerprint(path):
+    """SHA-256 of the metadata fields this evaluation uses, wherever IEMOCAP is stored.
+
+    The manifest records absolute file paths, so its file hash differs on every machine.
+    Audio is identified by its path inside the release instead (Session5/sentences/wav/...).
+    """
+    rows = []
+    for row in map(json.loads, Path(path).read_text().splitlines()):
+        parts = Path(row["audio_path"]).parts
+        start = max(i for i, part in enumerate(parts) if re.fullmatch(r"Session\d+", part))
+        rows.append({**{key: row[key] for key in METADATA_FIELDS}, "audio": "/".join(parts[start:])})
+    rows.sort(key=lambda r: r["utterance_id"])
+    return hashlib.sha256("".join(json.dumps(r, sort_keys=True) + "\n" for r in rows).encode()).hexdigest()
+
+
 def check_inputs(config, root=ROOT):
-    """Every pinned file must match its hash, and the ASR settings must be the live demo's."""
+    """Every pinned input must match its hash, and the ASR settings must be the live demo's."""
     from src.inference_pipeline import FAST_ASR
 
-    pinned = {config["metadata"]["path"]: config["metadata"]["sha256"]}
-    pinned.update({spec["checkpoint"]: spec["sha256"] for spec in config["models"].values()})
+    metadata = config["metadata"]
+    pinned = {spec["checkpoint"]: spec["sha256"] for spec in config["models"].values()}
     actual = {path: sha256(root / path) if (root / path).exists() else None for path in pinned}
+    pinned[metadata["path"]] = metadata["fingerprint_sha256"]
+    actual[metadata["path"]] = metadata_fingerprint(root / metadata["path"]) if (root / metadata["path"]).exists() else None
     try:
         actual["whisper model.bin"] = sha256(whisper_dir(config) / "model.bin")
     except Exception:  # snapshot not downloaded

@@ -100,3 +100,19 @@ def test_reference_check_needs_every_model_within_tolerance():
     assert reference_check(results, config) == "pass"
     config["dry_run_reference"]["macro_f1"]["A"] = 0.740
     assert reference_check(results, config) == "fail"
+
+
+def test_metadata_fingerprint_ignores_where_iemocap_is_stored(tmp_path):
+    from src.final_eval import metadata_fingerprint
+
+    def write(name, root, label="ang"):
+        rows = [{"utterance_id": "Ses05F_impro01_F000", "dialog_id": "Ses05F_impro01", "session": 5, "split": "test",
+                 "speaker": "F", "label_code": label, "text": "Hi.", "dialog_start_sec": 1.0, "dialog_end_sec": 2.0,
+                 "audio_path": f"{root}/IEMOCAP_full_release/Session5/sentences/wav/Ses05F_impro01/Ses05F_impro01_F000.wav",
+                 "video_path": f"{root}/elsewhere.avi"}]
+        (tmp_path / name).write_text("".join(json.dumps(r) + "\n" for r in rows))
+        return metadata_fingerprint(tmp_path / name)
+
+    here = write("a.jsonl", "/Users/someone/Session9/project/data")  # an unrelated "Session" folder higher up
+    assert here == write("b.jsonl", "/home/lab/datasets")
+    assert here != write("c.jsonl", "/home/lab/datasets", label="neu")

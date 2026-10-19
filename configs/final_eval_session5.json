@@ -10,7 +10,8 @@
   "session": 5,
   "metadata": {
     "path": "data/processed/iemocap_manifest/metadata.jsonl",
-    "sha256": "551891a60edb65127d9d4b5d001ade1831ef4266e9296979f8d30b6702f45301"
+    "fingerprint_sha256": "d521ffc77bbef1655e040f55086e01b8695395e4b292dd88bb0065a7a8e9c8cf",
+    "fingerprint": "metadata_fingerprint in src/final_eval.py: the fields the evaluation uses, with audio identified by its path inside the IEMOCAP release, so the check passes on any machine. It replaced the whole-file hash (551891a6..., which records absolute paths) on 2026-10-19, before any Session 5 run; the frozen decisions did not change."
   },
   "models": {
     "A": {
