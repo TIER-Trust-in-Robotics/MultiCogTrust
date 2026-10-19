@@ -154,6 +154,52 @@ CLIPS = {
         "subtitle": "Improvised · planning a wedding",
     },
 }
+# Demo v2 scenes (--set v2), chosen on Session 4 by stated rules over every tracked line:
+# signals that disagree while B is right, emotion shifts B follows, and where the face could help.
+CLIPS_V2 = {
+    "1_split_anger": {
+        "dialog": "Ses04F_impro04", "speaker": "F", "start": 118.0, "end": 169.0, "view": "multimodal",
+        "title": "Mixed signals, clear anger",
+        "subtitle": "Improvised · three years of job hunting",
+        "note": "Chosen where words and voice disagree on most lines but B is right.",
+    },
+    "2_split_sadness": {
+        "dialog": "Ses04F_impro02", "speaker": "F", "start": 82.5, "end": 152.4, "view": "multimodal",
+        "title": "Angry words, sad voice",
+        "subtitle": "Improvised · leaving the family to serve",
+        "note": "Chosen where words and voice disagree on most lines but B is right.",
+    },
+    "3_split_three_emotions": {
+        "dialog": "Ses04F_script01_3", "speaker": "M", "start": 5.3, "end": 87.5, "view": "multimodal",
+        "title": "Anger, calm, then love",
+        "subtitle": "Scripted · a proposal",
+        "note": "Chosen for disagreeing signals across three emotions; B misses the last line.",
+    },
+    "4_shift_anger_neutral": {
+        "dialog": "Ses04M_script01_2", "speaker": "F", "start": 3.7, "end": 68.0, "view": "multimodal",
+        "title": "Anger, a pause, anger again",
+        "subtitle": "Scripted · an unwelcome guest",
+        "note": "Chosen where the emotion shifts and B follows it.",
+    },
+    "5_shift_grief_anger": {
+        "dialog": "Ses04F_script01_1", "speaker": "M", "start": 10.3, "end": 95.5, "view": "multimodal",
+        "title": "Calm, grief, then anger",
+        "subtitle": "Scripted · a son confronts his mother",
+        "note": "Chosen where the emotion shifts and B follows it.",
+    },
+    "6_shift_sadness_lifts": {
+        "dialog": "Ses04F_script02_2", "speaker": "M", "start": 349.0, "end": 419.5, "view": "multimodal",
+        "title": "Sadness lifts",
+        "subtitle": "Scripted · a couple by the water at night",
+        "note": "Chosen where the emotion shifts and B follows it; B misses the first line.",
+    },
+    "7_face_knows_better": {
+        "dialog": "Ses04M_script03_1", "speaker": "F", "start": 160.9, "end": 230.4, "view": "multimodal",
+        "title": "When the face knows better",
+        "subtitle": "Scripted · laughing about old fights",
+        "note": "Chosen where B is wrong but the face alone is right; B does not use the face.",
+    },
+}
 MODALITY_ROWS = [
     ("text", "Text only", "the words, from the Whisper transcript"),
     ("audio", "Voice only", "tone of voice, first 6 s"),
@@ -179,6 +225,17 @@ COMPARE_SUMMARY = {"a_f1": 0.7229, "b_f1": 0.7284, "a_mps": 44.3, "b_mps": 50.1,
 MODALITY_LANES = [("text", "Text"), ("audio", "Voice"), ("face", "Face"), ("fused", "Deployed"),
                   ("with_face", "With face"), ("label", "Annot.")]
 SHIFT_LANES = [("fused", "Deployed"), ("face", "Face"), ("with_face", "With face"), ("label", "Annot.")]
+# Demo v2 (--set v2): the live demo's default view, each signal alone and then B, the headline model.
+V2_ROWS = [
+    ("text", "Words only", "what the transcript alone says"),
+    ("audio", "Voice only", "tone of voice alone, first 6 s"),
+    ("face", "Face only", "expression alone · not used by B"),
+    ("context", "B · Words + voice", "also reads the previous line"),
+]
+V2_LANES = [("text", "Words"), ("audio", "Voice"), ("face", "Face"), ("context", "B"), ("label", "Annot.")]
+# Macro F1 on all 1,031 scored Session 4 lines, Whisper tiny.en with the live demo's settings
+# (src/final_eval.py dry run for B; the words-only and voice-only controls on the same transcripts).
+V2_SUMMARY = {"b": 0.725, "words": 0.605, "voice": 0.619, "face": 0.383}
 
 LABELS = ["anger", "happiness", "sadness", "neutral"]
 SHORT = ["ANG", "HAP", "SAD", "NEU"]
@@ -267,6 +324,8 @@ def clip_rows(spec, metadata_path):
         raise ValueError(f"No utterances for {spec['dialog']} in the clip window")
     if any(r["session"] == 5 for r in rows):
         raise ValueError("Session 5 is held out until the frozen final evaluation")
+    if any(r["session"] != 4 for r in rows):
+        raise ValueError("Demo clips come from Session 4, the validation split the header names")
     return sorted(rows, key=lambda r: r["dialog_start_sec"])
 
 
@@ -303,19 +362,28 @@ class PooledControls:
         return {mode: [p[label] for label in LABELS] for mode, p in readings.items()}
 
 
-def run_inference(rows, device):
-    """Actual ASR + emotion model on the tracked speaker's finished utterances."""
-    import torch
+def whisper(live_asr):
+    """tiny.en with the Session 4 evaluation settings, or the live demo's (FAST_ASR, 4 threads)."""
     from faster_whisper import WhisperModel
     from huggingface_hub import snapshot_download
+
+    from src.inference_pipeline import FAST_ASR
+
+    model_path = Path(snapshot_download("Systran/faster-whisper-tiny.en", local_files_only=True))
+    transcriber = WhisperModel(str(model_path), device="cpu", compute_type="int8", cpu_threads=4 if live_asr else 2)
+    return transcriber, (FAST_ASR if live_asr else {}), model_path
+
+
+def run_inference(rows, device, live_asr=False):
+    """Actual ASR + emotion model on the tracked speaker's finished utterances."""
+    import torch
 
     from src.emotion_checkpoint import prepare_audio
     from src.emotion_fusion_infer import CrossModalEmotionPredictor
     from src.inference_pipeline import transcribe_samples
 
     torch.set_num_threads(2)
-    model_path = Path(snapshot_download("Systran/faster-whisper-tiny.en", local_files_only=True))
-    transcriber = WhisperModel(str(model_path), device="cpu", compute_type="int8", cpu_threads=2)
+    transcriber, asr_options, model_path = whisper(live_asr)
     predictor = CrossModalEmotionPredictor(CHECKPOINT, device, local_files_only=True)
     controls = PooledControls(predictor)
     preprocessing = predictor.preprocessing
@@ -323,7 +391,7 @@ def run_inference(rows, device):
     def infer(row):
         audio, sr = sf.read(row["audio_path"], dtype="float32")
         started = time.perf_counter()
-        text = transcribe_samples(transcriber, prepare_audio(audio, sr, preprocessing).numpy())
+        text = transcribe_samples(transcriber, prepare_audio(audio, sr, preprocessing).numpy(), **asr_options)
         transcribed = time.perf_counter()
         prediction = predictor.predict(text, audio, sr) if text else None
         finished = time.perf_counter()
@@ -355,7 +423,7 @@ def run_inference(rows, device):
             # Untimed: the controls are not part of the deployed latency.
             "controls": controls.predict(text, *sf.read(row["audio_path"], dtype="float32")) if text else None,
         }
-        if uid in cached_predictions and probabilities is not None:
+        if not live_asr and uid in cached_predictions and probabilities is not None:
             cached = cached_predictions[uid]
             record["parity"] = {
                 "asr_text_matches": cached_transcripts[uid]["text"] == text,
@@ -370,6 +438,7 @@ def run_inference(rows, device):
         "checkpoint_epoch": predictor.provenance.get("epoch"),
         "asr_model": "Systran/faster-whisper-tiny.en",
         "asr_revision": model_path.name,
+        "asr_settings": "live demo (FAST_ASR, 4 threads)" if live_asr else "Session 4 evaluation",
         "device": device,
         "utterances": results,
     }
@@ -446,7 +515,7 @@ def run_face_inference(rows, inference, device):
     return inference
 
 
-def run_context_inference(rows, inference, device, metadata_path):
+def run_context_inference(rows, inference, device, metadata_path, live_asr=False):
     """Model B on the tracked actor's lines: previous same-speaker Whisper line [SEP] current line."""
     import torch
 
@@ -467,8 +536,20 @@ def run_context_inference(rows, inference, device, metadata_path):
          and r["dialog_start_sec"] < first["dialog_start_sec"]),
         key=lambda r: r["dialog_start_sec"],
     )
-    # Lines before the clip were transcribed by the same Whisper settings (cached, deterministic).
-    previous = next((cached[r["utterance_id"]] for r in reversed(earlier) if cached.get(r["utterance_id"])), None)
+    if live_asr:  # transcribe back from the clip start with the live settings until a line has words
+        from src.emotion_checkpoint import prepare_audio
+        from src.inference_pipeline import transcribe_samples
+
+        transcriber, asr_options, _ = whisper(True)
+        previous = None
+        for r in reversed(earlier):
+            audio, sr = sf.read(r["audio_path"], dtype="float32")
+            previous = transcribe_samples(transcriber, prepare_audio(audio, sr, predictor.preprocessing).numpy(),
+                                          **asr_options) or None
+            if previous:
+                break
+    else:  # lines before the clip were transcribed by the same Whisper settings (cached, deterministic)
+        previous = next((cached[r["utterance_id"]] for r in reversed(earlier) if cached.get(r["utterance_id"])), None)
     silence = np.zeros(16000 * 3, np.float32)
     for _ in range(3):  # warm-up is not per-utterance latency
         shared.predict("Ready.", "Ready for the next utterance. [SEP] Ready.", silence, 16000)
@@ -554,6 +635,28 @@ def modality_readout(vectors):
     return f"Words and voice agree: {f}."
 
 
+def multimodal_readout(vectors):
+    """The live demo's readout: where each signal agrees with B. Correctness is shown separately."""
+    b = LABELS[int(np.argmax(vectors["context"]))]
+    words, voice, face = (None if vectors.get(k) is None else LABELS[int(np.argmax(vectors[k]))]
+                          for k in ("text", "audio", "face"))
+    if words is None or voice is None:
+        line = f"B reads {b}."
+    elif words == voice == b:
+        line = f"Words and voice agree: {b}."
+    elif words == voice:
+        line = f"Words and voice each read {words}; with the previous line, B reads {b}."
+    elif voice == b:
+        line = f"The words alone read {words}; the voice carries {b}."
+    elif words == b:
+        line = f"The words carry {b}; the voice alone reads {voice}."
+    else:
+        line = f"The words read {words} and the voice {voice}; combined, B reads {b}."
+    if face is not None:
+        line += " The face agrees." if face == b else f" The face alone reads {face}."
+    return line
+
+
 def annotator_name(u):
     if u["label_code"] == "exc":
         return "excitement (= happiness)"
@@ -582,6 +685,11 @@ class Renderer:
             self.signal_rows = MODALITY_ROWS
             self.row_y = [384 + i * 56 + (14 if i >= 3 else 0) for i in range(len(MODALITY_ROWS))]
             self.lanes, lane_y0 = MODALITY_LANES, 826
+        elif self.view == "multimodal":
+            # Each signal alone, a gap, then B.
+            self.signal_rows = V2_ROWS
+            self.row_y = [420 + i * 56 + (14 if i >= 3 else 0) for i in range(len(V2_ROWS))]
+            self.lanes, lane_y0 = V2_LANES, 826
         elif self.view == "compare":
             # Two model rows with a latency line each, then the face reference row.
             self.signal_rows, self.row_y = COMPARE_ROWS, [416, 496, 588]
@@ -602,7 +710,7 @@ class Renderer:
                      label_code=row["label_code"], label=LABEL_CODE_TO_INDEX.get(row["label_code"]))
             # In the comparison both results appear once A and then B have run, as live.
             context = u.get("context_model") or {}
-            u["step_ms"] = (context["both_emotion_ms"] if self.view == "compare" and context
+            u["step_ms"] = (context["both_emotion_ms"] if self.view in ("compare", "multimodal") and context
                             else u.get("emotion_ms", 0))
             u["land_sec"] = (
                 u["end_sec"] + (u["asr_ms"] + u["step_ms"]) / 1000
@@ -670,6 +778,23 @@ class Renderer:
                "face only 0.383 · with face 0.721, so the face was not shipped.",
                font=FONTS["footer"], fill=INK3)
 
+    def static_multimodal(self, d):
+        d.rounded_rectangle([PANE_X, 372, PANE_R, 764], radius=10, fill=CARD)
+        d.text((PANE_X + 20, 386), "SAME UTTERANCE  ·  EACH SIGNAL ALONE, THEN B", font=FONTS["eyebrow"], fill=INK3)
+        rule_y = (self.row_y[2] + 46 + self.row_y[3]) // 2
+        d.line([(PANE_X + 20, rule_y), (PANE_R - 20, rule_y)], fill=RULE, width=1)
+        self.static_timeline(d, 780)
+        d.text((40, 1026),
+               f"{self.spec['note']} Words, voice and face only are separate comparison models; B combines words and "
+               "voice and also reads the speaker's previous line. Annot. = annotator majority.",
+               font=FONTS["footer"], fill=INK3)
+        summary = V2_SUMMARY
+        d.text((40, 1050),
+               f"Session 4 macro F1, Whisper ASR with the live demo's settings: B {summary['b']:.3f} · words only "
+               f"{summary['words']:.3f} · voice only {summary['voice']:.3f} · face only {summary['face']:.3f}. "
+               "Timings: CPU, as the live demo runs.",
+               font=FONTS["footer"], fill=INK3)
+
     def static_layer(self, name):
         img = Image.new("RGB", (W, H), BG)
         d = ImageDraw.Draw(img)
@@ -677,14 +802,16 @@ class Renderer:
         d.text((40, 34), spec["title"], font=FONTS["title"], fill=INK)
         tw = d.textlength(spec["title"], font=FONTS["title"])
         compare = "A vs B  ·  " if self.view == "compare" else ""
-        d.text((40 + tw + 20, 43), f"{spec['subtitle']}  ·  {compare}{spec['dialog']}",
-               font=FONTS["subtitle"], fill=INK2)
-        text_right(d, (PANE_R, 45), "IEMOCAP Session 4 · validation split · actors not seen in training",
-                   FONTS["meta"], INK3)
+        subtitle = f"{spec['subtitle']}  ·  {compare}{spec['dialog']}"
+        d.text((40 + tw + 20, 43), subtitle, font=FONTS["subtitle"], fill=INK2)
+        meta = "IEMOCAP Session 4 · validation split · actors not seen in training"
+        if 40 + tw + 20 + d.textlength(subtitle, font=FONTS["subtitle"]) + 24 > PANE_R - d.textlength(meta, font=FONTS["meta"]):
+            raise ValueError(f"{name}: title and subtitle overlap the header; shorten them")
+        text_right(d, (PANE_R, 45), meta, FONTS["meta"], INK3)
         d.line([(40, 86), (PANE_R, 86)], fill=RULE, width=1)
 
         # Right pane cards.
-        for y0, y1 in ((104, 184), (200, 356 if self.view == "compare" else 324)):
+        for y0, y1 in ((104, 184), (200, 356 if self.view in ("compare", "multimodal") else 324)):
             d.rounded_rectangle([PANE_X, y0, PANE_R, y1], radius=10, fill=CARD)
         d.text((PANE_X + 20, 118), "MODEL OUTPUT", font=FONTS["eyebrow"], fill=INK3)
         actor = "female" if self.tracked == "F" else "male"
@@ -693,6 +820,8 @@ class Renderer:
         d.text((PANE_X + 20, 214), "HEARD BY THE MODEL  ·  WHISPER TINY.EN", font=FONTS["eyebrow"], fill=INK3)
         if self.view == "modalities":
             self.static_modalities(d)
+        elif self.view == "multimodal":
+            self.static_multimodal(d)
         elif self.view == "compare":
             self.static_compare(d)
         else:
@@ -775,6 +904,8 @@ class Renderer:
             self.draw_signal_rows(d, t)
         elif self.view == "compare":
             self.draw_compare(d, t)
+        elif self.view == "multimodal":
+            self.draw_multimodal(d, t)
         else:
             self.draw_stacks(d, t)
         self.draw_lanes(d, t)
@@ -870,7 +1001,7 @@ class Renderer:
         u = done[-1]
         fresh = ease_out((t - u["land_sec"]) / EASE_SEC)
         timing = (f"ASR {u['asr_ms']:.0f} ms · A then B {u['step_ms']:.0f} ms" if self.view == "compare"
-                  else f"ASR {u['asr_ms']:.0f} ms · emotion {u['emotion_ms']:.0f} ms")
+                  else f"ASR {u['asr_ms']:.0f} ms · emotion {u['step_ms']:.0f} ms")
         text_right(d, (PANE_R - 20, 215), timing, FONTS["small_mono"], INK3)
         lines = wrap(d, f"“{u['asr_text']}”", FONTS["body"], PANE_R - PANE_X - 40)
         if len(lines) > 2:
@@ -972,17 +1103,7 @@ class Renderer:
                                 self.row_y):
             if ms is not None:
                 d.text((x0, y + 52), f"emotion step {ms:.0f} ms", font=FONTS["small_mono"], fill=INK3)
-        if context.get("previous_text"):
-            lead = "B also reads the previous line: "
-            d.text((x0, 316), lead, font=FONTS["small"], fill=INK3)
-            room = PANE_R - 20 - x0 - d.textlength(lead, font=FONTS["small"])
-            body = context["previous_text"]
-            quote = f"“{body}”"
-            while d.textlength(quote, font=FONTS["small"]) > room and body:
-                body = body[:-1]
-                quote = f"“{body.rstrip()}…”"
-            d.text((x0 + d.textlength(lead, font=FONTS["small"]), 316), quote, font=FONTS["small"],
-                   fill=mix(INK2, CARD, k))
+        self.draw_previous_line(d, context, k)
         if vectors.get("fused") is not None and vectors.get("context") is not None:
             readout = compare_readout(u, int(np.argmax(vectors["fused"])), int(np.argmax(vectors["context"])))
             d.text((x0, 654), readout, font=FONTS["body_medium"], fill=mix(INK, CARD, k))
@@ -992,6 +1113,41 @@ class Renderer:
         if u["label"] is None:
             x += d.textlength(annotator_name(u) + "  ", font=FONTS["label"])
             d.text((x, 696), "·  unscored", font=FONTS["small"], fill=INK3)
+
+    def draw_previous_line(self, d, context, k):
+        """The speaker's previous transcript, which B reads before the current line."""
+        x0 = PANE_X + 20
+        if not context.get("previous_text"):
+            return
+        lead = "B also reads the previous line: "
+        d.text((x0, 316), lead, font=FONTS["small"], fill=INK3)
+        room = PANE_R - 20 - x0 - d.textlength(lead, font=FONTS["small"])
+        body = context["previous_text"]
+        quote = f"“{body}”"
+        while d.textlength(quote, font=FONTS["small"]) > room and body:
+            body = body[:-1]
+            quote = f"“{body.rstrip()}…”"
+        d.text((x0 + d.textlength(lead, font=FONTS["small"]), 316), quote, font=FONTS["small"],
+               fill=mix(INK2, CARD, k))
+
+    def draw_multimodal(self, d, t):
+        """Each signal alone, then B, with the live demo's readout and the annotators' label."""
+        u, k, vectors = self.draw_signal_rows(d, t)
+        x0 = PANE_X + 20
+        if u is None:
+            d.text((x0, 690), "Predictions appear when the tracked actor finishes an utterance",
+                   font=FONTS["small"], fill=INK3)
+            return
+        self.draw_previous_line(d, u.get("context_model") or {}, k)
+        if vectors.get("context") is not None:
+            for i, line in enumerate(wrap(d, multimodal_readout(vectors), FONTS["body_medium"], PANE_R - PANE_X - 40)[:2]):
+                d.text((x0, 662 + i * 28), " ".join(line), font=FONTS["body_medium"], fill=mix(INK, CARD, k))
+        d.text((x0, 728), "Annotators", font=FONTS["small"], fill=INK3)
+        x = x0 + d.textlength("Annotators  ", font=FONTS["small"])
+        d.text((x, 725), annotator_name(u), font=FONTS["label"], fill=INK)
+        if u["label"] is None:
+            x += d.textlength(annotator_name(u) + "  ", font=FONTS["label"])
+            d.text((x, 728), "·  unscored", font=FONTS["small"], fill=INK3)
 
     def draw_stacks(self, d, t):
         """Each signal alone, the deployed fusion and the face mixture, with a readout."""
@@ -1122,9 +1278,11 @@ def render(name, spec, rows, inference, out_path, fps, preview_at=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--clip", choices=[*CLIPS, "all"], default="all")
+    parser.add_argument("--set", choices=("v1", "v2"), default="v1",
+                        help="v2: the live demo's view (each signal alone, then B), written to demo/demov2/")
+    parser.add_argument("--clip", choices=[*CLIPS, *CLIPS_V2, "all"], default="all")
     parser.add_argument("--metadata", type=Path, default=DEFAULT_METADATA)
-    parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
+    parser.add_argument("--output-dir", type=Path, help="Default: data/processed/demo (v1) or its demov2/ folder (v2)")
     parser.add_argument("--device", choices=("cpu", "mps"), default="cpu")  # mps adds one-off compiles to latencies
     parser.add_argument("--fps", type=int, default=30)
     parser.add_argument("--rerun-inference", action="store_true")
@@ -1132,15 +1290,22 @@ def main():
     parser.add_argument("--compare", action="store_true",
                         help="Render A (deployed) beside B (previous-line context model) as compare_<clip>.mp4")
     args = parser.parse_args()
-    if args.compare and args.device != "cpu":
-        parser.error("--compare times A and B as deployed on CPU; pass --device cpu")
+    v2 = args.set == "v2"
+    if (args.compare or v2) and args.device != "cpu":
+        parser.error("--compare and --set v2 time A and B as deployed on CPU; pass --device cpu")
+    if args.compare and v2:
+        parser.error("--compare renders the v1 A/B scenes")
+    clips = CLIPS_V2 if v2 else CLIPS
+    if args.clip != "all" and args.clip not in clips:
+        parser.error(f"{args.clip} is not a {args.set} clip")
+    args.output_dir = args.output_dir or (OUTPUT_DIR / "demov2" if v2 else OUTPUT_DIR)
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    names = [n for n in CLIPS if args.compare or not CLIPS[n].get("compare_only")]
+    names = [n for n in clips if args.compare or not clips[n].get("compare_only")]
     for name in names if args.clip == "all" else [args.clip]:
-        if CLIPS[name].get("compare_only") and not args.compare:
+        if clips[name].get("compare_only") and not args.compare:
             parser.error(f"{name} is an A/B scene; render it with --compare")
-        spec = dict(CLIPS[name], view="compare") if args.compare else CLIPS[name]
+        spec = dict(clips[name], view="compare") if args.compare else clips[name]
         rows = clip_rows(spec, args.metadata)
         inference_path = args.output_dir / f"{name}.inference.json"
         tracked = [r for r in rows if r["speaker"] == spec["speaker"] and r["dialog_end_sec"] <= spec["end"]]
@@ -1148,16 +1313,16 @@ def main():
             inference = json.loads(inference_path.read_text())
         else:
             print(f"{name}: inference on {len(tracked)} utterances", flush=True)
-            inference = {"clip": name, **spec, **run_inference(tracked, args.device)}
+            inference = {"clip": name, **spec, **run_inference(tracked, args.device, live_asr=v2)}
             inference_path.write_text(json.dumps(inference, indent=2))
         if any("face" not in u for u in inference["utterances"]):
             print(f"{name}: face replay on {len(tracked)} utterances", flush=True)
             inference = run_face_inference(tracked, inference, args.device)
             inference_path.write_text(json.dumps(inference, indent=2))
-        if args.compare and any("context_model" not in u or (u["context_model"] and "both_emotion_ms" not in u["context_model"])
-                                for u in inference["utterances"]):
+        if (args.compare or v2) and any("context_model" not in u or (u["context_model"] and "both_emotion_ms" not in u["context_model"])
+                                        for u in inference["utterances"]):
             print(f"{name}: context model (B) on {len(tracked)} utterances", flush=True)
-            inference = run_context_inference(tracked, inference, args.device, args.metadata)
+            inference = run_context_inference(tracked, inference, args.device, args.metadata, live_asr=v2)
             inference_path.write_text(json.dumps(inference, indent=2))
         for u in inference["utterances"]:
             parity = u.get("parity")
